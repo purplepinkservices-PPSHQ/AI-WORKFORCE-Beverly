@@ -1,4 +1,4 @@
-# 🟣 Beverly Assistant Bot
+# 🟣 AI-WORKFORCE-Beverly
 
 **Beverly** ist ein modularer, KI-gestützter Discord-Assistent für  
 📁 Dokumentenmanagement · 🧠 Projekt- & Memory-Tracking · 📊 Task- & Kontextsteuerung  
