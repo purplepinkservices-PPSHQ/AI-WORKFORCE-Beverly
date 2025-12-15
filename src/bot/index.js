@@ -1,82 +1,158 @@
-// src/bot/index.js
-// Einstiegspunkt für den Larry Assistant Bot
+/**
+ * ============================================================
+ * Beverly AI Workforce – Discord Bot (Railway Production)
+ * Phase A + B – Stable
+ * ============================================================
+ */
 
-// 🔹 Basis-Imports
-const path = require("path");
-const dotenv = require("dotenv");
-dotenv.config();
-
-const { Client, GatewayIntentBits, Partials } = require("discord.js");
+require("dotenv").config();
 const express = require("express");
-const { extractTextFromImage } = require("../ocr/ocr-engine");
+const { Client, GatewayIntentBits, Partials } = require("discord.js");
 
-// 🔹 Ein paar Basis-Konstanten
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const PORT = process.env.PORT || 3000;
-
-// Basic Safety Check
-if (!BOT_TOKEN) {
-  console.error("[FATAL] BOT_TOKEN fehlt in der .env Datei!");
-  process.exit(1);
+// ------------------------------------------------------------
+// ENV CHECK (KRITISCH)
+// ------------------------------------------------------------
+if (!process.env.DISCORD_BOT_TOKEN && !process.env.BOT_TOKEN) {
+    console.error("[FATAL] DISCORD_BOT_TOKEN fehlt!");
+    process.exit(1);
 }
 
-// 🔹 Discord Client erstellen
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.DirectMessages
-  ],
-  partials: [Partials.Channel]
-});
-
-// 🔹 Express Server (Basis für spätere AI/OCR-Endpoints)
+// ------------------------------------------------------------
+// EXPRESS SERVER (KEEP ALIVE FOR RAILWAY)
+// ------------------------------------------------------------
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
-// Simple Healthcheck-Route
 app.get("/", (req, res) => {
-  res.json({ status: "ok", message: "Larry Assistant Backend läuft ✅" });
+    res.status(200).send("Beverly AI Workforce is alive 🚀");
 });
 
-// Server starten
 app.listen(PORT, () => {
-  console.log(`[HTTP] Express Server läuft auf Port ${PORT}`);
+    console.log(`[HTTP] Express Server läuft auf Port ${PORT}`);
 });
 
-// 🔹 Discord Ready Event
-client.once("ready", () => {
-  console.log(`🤖 Larry Assistant Bot eingeloggt als: ${client.user.tag}`);
-  console.log("✅ Bot ist bereit und wartet in deinem Discord-Server.");
+// ------------------------------------------------------------
+// SYSTEM
+// ------------------------------------------------------------
+const router = require("../system/router");
+const state = require("../core/state");
+
+// ------------------------------------------------------------
+// NOTION
+// ------------------------------------------------------------
+const { testRead } = require("../notion/read-task-engine");
+const { writeProjectMemory } = require("../notion/write-project-memory");
+
+const TASK_ENGINE_DB_ID = process.env.TASK_ENGINE_DB_ID;
+const PROJECT_MEMORY_DB_ID = process.env.PROJECT_MEMORY_DB_ID;
+
+// ------------------------------------------------------------
+// CREATOR MODULES
+// ------------------------------------------------------------
+const Verification = require("../creator/verification");
+const VerificationAI = require("../creator/verification-ai");
+const VerificationBrain = require("../creator/verification-brain");
+
+const { showCreatorMainMenu, handleCreatorMenuMessage } = require("../creator/menu");
+const { handleCreatorGeniusMessage } = require("../creator/genius");
+const { handleCreatorContentUpload } = require("../creator/content-upload");
+
+// ------------------------------------------------------------
+// DISCORD CLIENT
+// ------------------------------------------------------------
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.MessageContent
+    ],
+    partials: [
+        Partials.Channel,
+        Partials.Message,
+        Partials.User
+    ]
 });
 
-// 🔹 Message Listener (für ersten Test)
+// ------------------------------------------------------------
+// READY
+// ------------------------------------------------------------
+client.once("ready", async () => {
+    console.log(`🤖 Beverly Assistant Bot gestartet als: ${client.user.tag}`);
+
+    // --- Notion Test ---
+    try {
+        console.log("🔍 Starte Notion Read-Test (Task Engine) …");
+        await testRead(TASK_ENGINE_DB_ID);
+        console.log("✅ Notion Read-Test erfolgreich.");
+    } catch (err) {
+        console.error("❌ Notion Read-Test fehlgeschlagen:", err.message);
+    }
+
+    // --- Memory Snapshot ---
+    try {
+        console.log("🧠 Schreibe Memory Snapshot …");
+        await writeProjectMemory({
+            databaseId: PROJECT_MEMORY_DB_ID,
+            titel: "Railway Start – Beverly online",
+            beschreibung: "Beverly läuft produktiv auf Railway.",
+            memoryTags: ["Memory Engine", "Backend / System"],
+            prioritaet: "Mittel",
+            lastContext: "Railway Boot",
+            kontextSignal: "Start",
+            kontextMatching: 95,
+            aktivierterKontext: true,
+            letzteAktion: "Gespeichert",
+            supervisorFlag: false,
+            snapshot: "Startup erfolgreich",
+            systemHinweis: "Railway Production",
+            kontext: "Automatischer Start"
+        });
+        console.log("✅ Memory Snapshot erfolgreich geschrieben.");
+    } catch (err) {
+        console.error("❌ Memory Write fehlgeschlagen:", err.message);
+    }
+});
+
+// ------------------------------------------------------------
+// MESSAGE ROUTING (DM)
+// ------------------------------------------------------------
 client.on("messageCreate", async (message) => {
-  // Eigene Nachrichten & andere Bots ignorieren
-  if (message.author.bot) return;
+    if (message.author.bot) return;
 
-  // Nur auf deinen speziellen Testkanal reagieren (optional)
-  // Du kannst hier später die Channel-ID eintragen.
-  // if (message.channel.name !== "👸🏻-larry-assistenz") return;
+    if (!message.guild) {
+        console.log("📩 DM:", message.author.username, "→", message.content);
 
-  // 1) Ping-Test
-  if (message.content.toLowerCase() === "!ping") {
-    await message.reply("🏓 Pong – ich bin wach und auf deinem PC am Start!");
-    return;
-  }
+        const handled = await router.routeDM(message, {
+            Verification,
+            VerificationAI,
+            VerificationBrain,
+            showCreatorMainMenu,
+            handleCreatorMenuMessage,
+            handleCreatorGeniusMessage,
+            handleCreatorContentUpload,
+            state
+        });
 
-  // 2) Einfacher Setup-Trigger (Platzhalter für echtes /setup später)
-  if (message.content.toLowerCase() === "!setup") {
-    await message.reply(
-      "🧩 Setup gestartet – in der finalen Version werde ich hier dein Master-Profil abfragen. Aktuell bin ich nur ein Skeleton 🤍"
-    );
-    return;
-  }
+        return handled;
+    }
 });
 
-// 🔹 Bot einloggen
-client.login(BOT_TOKEN).catch((err) => {
-  console.error("[FATAL] Konnte nicht bei Discord einloggen:", err);
-  process.exit(1);
-});
+// ------------------------------------------------------------
+// LOGIN
+// ------------------------------------------------------------
+const TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.BOT_TOKEN;
+
+client.login(TOKEN)
+    .then(() => console.log("🚀 Beverly ist online und wartet auf DMs."))
+    .catch(err => {
+        console.error("[FATAL] Discord Login Fehler:", err.message);
+        process.exit(1);
+    });
+
+// ------------------------------------------------------------
+// KEEP PROCESS ALIVE (RAILWAY SAFETY NET)
+// ------------------------------------------------------------
+setInterval(() => {
+    // bewusst leer – hält Event Loop offen
+}, 60 * 1000);
