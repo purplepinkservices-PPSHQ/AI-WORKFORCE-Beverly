@@ -1,27 +1,21 @@
 {
   "name": "beverly-ai-workforce",
   "version": "1.0.0",
-  "description": "Beverly AI Workforce – Discord-based AI assistant with Notion memory, task engine and supervisor logic.",
+  "description": "Beverly AI Workforce – Discord Assistant",
   "main": "src/bot/index.js",
   "scripts": {
-    "start": "node src/bot/index.js",
-    "dev": "nodemon src/bot/index.js"
+    "start": "node src/bot/index.js"
   },
   "dependencies": {
     "@notionhq/client": "^5.4.0",
     "axios": "^1.7.0",
     "discord.js": "^14.16.0",
     "dotenv": "^16.4.0",
-    "dropbox": "^10.34.0",
-    "express": "^4.19.0",
+    "express": "^4.19.2",
     "googleapis": "^136.0.0",
+    "openai": "^4.28.0",
+    "dropbox": "^10.34.0",
     "sqlite3": "^5.1.7",
     "tesseract.js": "^5.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.0"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }
