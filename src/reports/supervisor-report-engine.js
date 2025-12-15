@@ -6,11 +6,7 @@ async function buildSupervisorReport({ databaseId, mode = "daily" }) {
     const notion = getNotion();
 
     const since = new Date();
-    if (mode === "weekly") {
-        since.setDate(since.getDate() - 7);
-    } else {
-        since.setDate(since.getDate() - 1);
-    }
+    since.setDate(since.getDate() - (mode === "weekly" ? 7 : 1));
 
     const response = await notion.databases.query({
         database_id: databaseId,

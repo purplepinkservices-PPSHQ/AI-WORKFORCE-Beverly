@@ -8,7 +8,6 @@ const RECALL_COOLDOWN_MS = 30 * 60 * 1000; // 30 Minuten
 async function recallActiveContexts({ userId, databaseId }) {
     const now = Date.now();
 
-    // Cooldown pro User
     if (lastRecallByUser.has(userId)) {
         const last = lastRecallByUser.get(userId);
         if (now - last < RECALL_COOLDOWN_MS) return null;
@@ -20,21 +19,12 @@ async function recallActiveContexts({ userId, databaseId }) {
         database_id: databaseId,
         filter: {
             and: [
-                {
-                    property: "Aktivierter Kontext",
-                    checkbox: { equals: true }
-                },
-                {
-                    property: "Supervisor-Flag",
-                    checkbox: { equals: true }
-                }
+                { property: "Aktivierter Kontext", checkbox: { equals: true } },
+                { property: "Supervisor-Flag", checkbox: { equals: true } }
             ]
         },
         sorts: [
-            {
-                property: "Kontext Timestamp",
-                direction: "descending"
-            }
+            { property: "Kontext Timestamp", direction: "descending" }
         ],
         page_size: 1
     });
@@ -44,15 +34,10 @@ async function recallActiveContexts({ userId, databaseId }) {
     lastRecallByUser.set(userId, now);
 
     const page = response.results[0];
-    const title =
-        page.properties.Titel.title[0]?.plain_text || "Aktiver Kontext";
-    const snapshot =
-        page.properties.Snapshot.rich_text[0]?.plain_text || "";
+    const title = page.properties.Titel.title[0]?.plain_text || "Aktiver Kontext";
+    const snapshot = page.properties.Snapshot.rich_text[0]?.plain_text || "";
 
-    return {
-        title,
-        snapshot
-    };
+    return { title, snapshot };
 }
 
 module.exports = { recallActiveContexts };
