@@ -1,197 +1,130 @@
-# Larry Assistant Bot 🧠⚡  
-**Ein KI-gestützter Dokumenten-, Finanz- und Versicherungs-Assistent**  
-**by Larry Adler (PPSHQ)**  
-**Version 1.0**
+# 🟣 Beverly Assistant Bot
 
----
+**Beverly** ist ein modularer, KI-gestützter Discord-Assistent für  
+📁 Dokumentenmanagement · 🧠 Projekt- & Memory-Tracking · 📊 Task- & Kontextsteuerung  
+mit enger Anbindung an **Notion**, **Dropbox** und zukünftige KI-Module.
 
-## 📌 Projektübersicht
+Dieses Repository enthält den **stabilen Core (Phase A + B)** von Beverly.
 
-Der **Larry Assistant Bot** ist ein hochmoderner, lokal betriebener KI-Assistent zur automatischen Verarbeitung, Analyse und Verwaltung von:
+## 🚀 Status
 
-- Dokumenten  
-- Schulden  
-- Versicherungen  
-- Behördenunterlagen  
-- persönlichen Stammdaten  
-- automatischen Briefen  
-- Fristen & Prioritäten
+✅ **Phase A – Stabil**
 
-Der Bot dient als **digitaler persönlicher Assistent**, der über Discord gesteuert wird, lokal auf dem PC läuft und Daten sicher in die Cloud schreibt.
+- Discord Bot Core
+- DM-Routing
+- Auto-Memory (Notion)
+- Manuelle Snapshots (`snapshot`, `abend`)
+- Dropbox-Initialisierung
 
-Ziel:  
-**Millionen Menschen von Papierkram, Stress, Schuldenchaos & Behördenüberlastung befreien.**
+✅ **Phase B – Aktiv**
 
----
+- Projekt-Memory-Datenbank (Notion)
+- Property-Inspector
+- Saubere Property-Writes
+- Supervisor-Grundlogik
 
-## ✨ Key Features (Aktuelle Version – 1.0)
+⏳ **Phase C – in Vorbereitung**
 
-### 📥 Automatische Dokumentenerkennung
-- Upload via Discord  
-- OCR (lokal)  
-- KI-Analyse (lokal oder Cloud-Fallback)  
-- Automatische Extraktion:  
-  - Gläubiger  
-  - Betrag  
-  - Frist  
-  - Kategorie  
-  - Aktenzeichen  
-  - Versicherungsdaten
+- Task Engine Sync
+- Kontext-Routing
+- Supervisor Automationen
 
-### 🗂️ Vollautomatische Sortierung
-Ordnerstrukturen in Google Drive:
+## 🧠 Kernfunktionen
 
-/Larry
-/Schuldner
-/Finanzamt
-/Gerichtsvollzieher
-/Ärzte
-/Behörden
-/UG
-/Sonstiges
-/Versicherungen
-/Haftpflicht
-/Hausrat
-/Rechtsschutz
-/Krankenversicherung
-/BU
-/KFZ
-/Wohngebäude
-/Sonstiges
-/Master-Daten
+### 📩 Discord
 
+- Vollständiger **DM-Workflow**
+- Command-Handling:
+  - `snapshot` → Projekt-Snapshot
+  - `abend` → Tagesabschluss
+  - `menu` → Creator-Menü
+- Debug-Logging für alle Events
 
-### 🧾 Master-Profil
-Bot fragt beim ersten Start alle relevanten Lebensdaten ab:
+### 🧠 Notion
 
-- Name, Adresse, Steuer-ID  
-- Kinder  
-- Haustiere  
-- Auto  
-- Haus/Eigentum  
-- Versicherungen  
-- Gesundheitsstatus  
-- Gewerbe  
-- u. v. m.
+- **Task Engine (Read)**
+- **Project Memory Database (Write)**
+- Automatische Property-Erkennung
+- Stabiler Write-Flow (keine Validation Errors)
 
-→ Wird gespeichert und **für alle Briefe** automatisch genutzt.
+### 📁 Dropbox
 
-### ⚠️ Priorisierung
-- 🔴 CRITICAL (Vollstreckung)  
-- 🟡 MEDIUM (Mahnung)  
-- 🟢 LOW (Info)
+- Automatische Initialisierung der Beverly-Ordnerstruktur
+- Wiederanlaufsicher (existierende Ordner werden erkannt)
 
-### 📨 Automatische Schreiben
-Der Bot generiert professionelle, vollständige Briefe:
+## 📂 Projektstruktur
 
-- Ratenzahlungsanträge  
-- Stundungsanträge  
-- Fristverlängerungen  
-- Härtefallanträge  
-- Versicherungs-Kündigungen  
-- Behördenantworten
+src/
+├─ bot/ → Discord Bot (index.js)
+├─ system/ → Router, Task Queue
+├─ memory/ → Memory Engine (Discord → Notion)
+├─ notion/ → Notion Client + DB Logic
+├─ cloud/ → Dropbox Integration
+├─ creator/ → Creator & Verification Flows
+├─ finance/ → Haushalts- & Finanzlogik
+└─ core/ → Globaler State
 
-Alles vollautomatisch mit deinen Stammdaten.
+## ⚙️ Installation
 
-### 🧠 Lokaler KI-Modus
-Der Bot ist so gebaut, dass er **lokale KI-Instanzen** unterstützt:
+### 1️⃣ Repository klonen
 
-- Llama 3  
-- Qwen  
-- Mixtral  
-- GPT4All  
-- oder eigene Custom-Modelle  
+git clone https://github.com/purplepinkservices-PPSHQ/larry-assistant-bot.git
+cd larry-assistant-bot
 
-→ Optional Cloud-Fallback.
+2️⃣ Abhängigkeiten installieren
 
----
+npm install
 
-## 🏗️ Tech Stack
+3️⃣ .env anlegen
+env
 
-- Node.js  
-- discord.js  
-- Express  
-- Tesseract OCR (lokal)  
-- Google Drive API  
-- Google Sheets &/oder SQLite  
-- Lokale KI-Schnittstellen  
-- Cloud-KI-Fallback  
+DISCORD_BOT_TOKEN=xxxxxxxx
+NOTION_API_KEY=secret_xxxxxxxx
+PROJECT_MEMORY_DB_ID=xxxxxxxx
+TASK_ENGINE_DB_ID=xxxxxxxx
+DROPBOX_ACCESS_TOKEN=xxxxxxxx
 
----
+4️⃣ Bot starten
+bash
+Code kopieren
+npm start
 
-## 📁 Projektstruktur
+🧪 Teststatus
+Beim Start müssen folgende Logs erscheinen:
 
-larry-assistant-bot/
-│
-├── README.md
-├── INSTALL.md
-├── DEVELOPERS.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-│
-├── .github/
-│ ├── ISSUE_TEMPLATE/
-│ │ ├── bug_report.md
-│ │ ├── feature_request.md
-│ └── pull_request_template.md
-│
-├── src/
-│ ├── bot/
-│ │ ├── index.js
-│ │ ├── commands/
-│ │ ├── events/
-│ │ └── utils/
-│ │
-│ ├── ai/
-│ │ ├── local/
-│ │ ├── cloud/
-│ │ └── prompts/
-│ │
-│ ├── ocr/
-│ │ └── ocr-engine.js
-│ │
-│ ├── storage/
-│ │ ├── google-drive.js
-│ │ ├── database.js
-│ │ └── structure.json
-│
-├── data/
-│ ├── master-profile.json
-│ ├── logs/
-│ └── temp/
-│
-└── package.json
+📁 Dropbox bereit.
+📊 Task Engine Treffer: 1
+🧠 Memory Snapshot erfolgreich geschrieben.
+📩 messageCreate FIRED …
 
+Wenn das der Fall ist → System stabil ✅
 
----
+🧭 Architektur-Prinzipien
 
-## 🚀 Roadmap
+Keine Snippets – immer vollständige Dateien
 
-### ✔️ Version 1.0
-- Dokumentenpipeline  
-- Versicherungsmodul  
-- Master-Profil  
-- Lokaler Betrieb  
-- Cloud Drive Integration  
+Kein Blind-Write – Property-Inspection vor Writes
 
-### 🔜 Version 1.5
-- PDF-Briefe  
-- Kalenderintegration  
-- Vollständiger Versicherungscheck  
+Nicht blockierend – Auto-Memory läuft async
 
-### 🔜 Version 2.0
-- Web Dashboard  
-- Multi-User  
-- Automatische Behörden-Formulare  
-- KI-Agenten  
+Supervisor-fähig – vorbereitet für Automationen
 
----
+🛣️ Roadmap (Kurz)
 
-## 📄 Lizenz
-© 2025 — Larry Adler (PPSHQ)  
+Phase C: Task Engine Write
+
+Phase D: Kontext-Matching
+
+Phase E: Supervisor Scheduler
+
+Phase F: Railway Deployment
+
+Phase G: Multi-User Testbetrieb
+
+🟣 Lizenz
+Internes Projekt von PPSHQ – Purple Pink Services
 Alle Rechte vorbehalten.
 
----
 
 
 
