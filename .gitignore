@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Env
+.env
+.env.*
+
+# Data / Runtime
+data/
+reports/
+*.pdf
+*.csv
+*.json
+
+# OCR / AI
+*.traineddata
+*.bin
+*.model
+
+# OS
+.DS_Store
+Thumbs.db
