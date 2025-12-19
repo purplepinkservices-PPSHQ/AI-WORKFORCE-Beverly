@@ -1,17 +1,8 @@
 "use strict";
 
 // ============================================================
-// Gläubiger-Engine (Praxis / Firma / Händler)
+// Gläubiger-Engine (Praxis / Firma / Händler / Behörde)
 // Datei: src/engines/creditor-engine.js
-//
-// Ziel:
-// - Gläubiger/Firma robust erkennen
-// - Fokus: Kopfbereich des Dokuments
-// - Heuristiken:
-//   1) Firmen-Marker (GmbH, Praxis, Dental, Apotheke, Zentrum, etc.)
-//   2) GROSSBUCHSTABEN-Zeilen
-//   3) Keyword-Score (stärker als Einzel-Treffer)
-// - Kein Personenname, keine Adresse
 // ============================================================
 
 function normalizeLine(s = "") {
@@ -28,13 +19,21 @@ const COMPANY_KEYWORDS = [
   "handel","shop","markt","supermarkt",
   "bank","sparkasse","versicherung",
   "studio","service","betrieb","unternehmen",
-  "logistik","bau","immobilien","verwaltung"
+  "logistik","bau","immobilien","verwaltung",
+
+  // ✅ MINIMAL: Behörden/Justiz als "Creditor"
+  "amtsgericht","landgericht","oberlandesgericht",
+  "gericht","staatsanwaltschaft",
+  "jobcenter","arbeitsagentur",
+  "finanzamt","landesjustizkasse",
+  "polizei","ministerium","stadt","gemeinde"
 ];
 
 const EXCLUDE_KEYWORDS = [
   "rechnung","rechnungsnr","kundennr","kunden-nr",
   "iban","bic","umsatzsteuer","mwst","gesamtbetrag",
-  "datum","telefon","fax","email","www","http"
+  "datum","telefon","fax","email","www","http",
+  "betreff","aktenzeichen","vorgangsnummer"
 ];
 
 function isAddressLike(line) {
@@ -89,7 +88,7 @@ function detectCreditor(rawText = "") {
   const lines = text.split(/\r?\n/).map(normalizeLine).filter(Boolean);
 
   // Nur Kopfbereich betrachten
-  const head = lines.slice(0, 25);
+  const head = lines.slice(0, 30);
 
   let best = null;
 

@@ -2,64 +2,65 @@
 
 const fs = require("fs");
 const path = require("path");
-
-const { pdfToImages } = require("./pdf-to-images");
 const { runVisionOCR } = require("./vision-ocr");
+const { convertPdfToImages } = require("../free/pdf-handler");
 
+/* =========================================================
+   🔧 PDF-Typ erkennen (TEXT vs SCAN)
+   ========================================================= */
+function detectPdfType(buffer) {
+  const head = buffer.slice(0, 1024).toString("latin1");
+
+  const hasText =
+    head.includes("/Font") ||
+    head.includes("BT") ||
+    head.includes("/Contents");
+
+  return hasText ? "text-pdf" : "scan-pdf";
+}
+
+/* =========================================================
+   🔴 OCR ENTRYPOINT
+   ========================================================= */
 async function runOCR({ buffer, filePath, mimeType }) {
-  if (!buffer || !mimeType) {
-    throw new Error("runOCR: buffer oder mimeType fehlt");
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error("runOCR: buffer fehlt oder ist ungültig");
   }
 
-  // =====================
-  // PDF → IMMER VISION
-  // =====================
+  /* ===================== PDF ===================== */
   if (mimeType === "application/pdf") {
-    if (!filePath || !fs.existsSync(filePath)) {
-      throw new Error("runOCR: filePath fehlt für Scan-PDF");
-    }
+    const pdfType = detectPdfType(buffer);
 
-    const images = await pdfToImages(filePath, 2);
-    if (!images.length) {
+    /* ---------- TEXT-PDF ---------- */
+    if (pdfType === "text-pdf") {
+      const text = buffer.toString("latin1");
+
       return {
-        text: "",
-        source: "pdf-empty",
-        confidence: 0.2
+        source: "pdf-text",
+        text
       };
     }
 
-    let combinedText = "";
+    /* ---------- SCAN-PDF ---------- */
+    if (pdfType === "scan-pdf") {
+      if (!filePath) {
+        throw new Error("runOCR: filePath fehlt für Scan-PDF");
+      }
 
-    for (const imgPath of images) {
-      const imgBuffer = fs.readFileSync(imgPath);
-      const res = await runVisionOCR(imgBuffer, "image/png");
-      if (res?.text) combinedText += "\n" + res.text;
+      const images = await convertPdfToImages(filePath);
+
+      return await runVisionOCR({
+        images,
+        source: "pdf-scan"
+      });
     }
-
-    return {
-      text: combinedText.trim(),
-      source: "pdf-vision",
-      confidence: combinedText.length > 120 ? 0.9 : 0.4
-    };
   }
 
-  // =====================
-  // IMAGE → VISION
-  // =====================
-  if (mimeType.startsWith("image/")) {
-    const res = await runVisionOCR(buffer, mimeType);
-    return {
-      text: res.text || "",
-      source: "vision",
-      confidence: res.confidence || 0.8
-    };
-  }
-
-  return {
-    text: "",
-    source: "unknown",
-    confidence: 0.1
-  };
+  /* ===================== IMAGE ===================== */
+  return await runVisionOCR({
+    images: [buffer],
+    source: "image"
+  });
 }
 
 module.exports = { runOCR };

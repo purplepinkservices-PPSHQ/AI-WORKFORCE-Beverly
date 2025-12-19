@@ -1,15 +1,26 @@
 "use strict";
 
 const OpenAI = require("openai");
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new OpenAI();
 
-async function runVisionOCR(buffer, mimeType) {
-  if (!buffer || !Buffer.isBuffer(buffer)) {
-    throw new Error("runVisionOCR: ungültiger Buffer");
+/* =========================================================
+   🔴 BESTEHEND – nur gültiges image_url Payload
+   ========================================================= */
+async function runVisionOCR({ images, source }) {
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    throw new Error("runVisionOCR: keine Bilder erhalten");
   }
 
-  const base64 = buffer.toString("base64");
-  const dataUrl = `data:${mimeType};base64,${base64}`;
+  const content = images.map((img) => {
+    const base64 = Buffer.isBuffer(img)
+      ? img.toString("base64")
+      : img;
+
+    return {
+      type: "input_image",
+      image_url: `data:image/png;base64,${base64}`
+    };
+  });
 
   const response = await client.responses.create({
     model: "gpt-4.1-mini",
@@ -17,21 +28,23 @@ async function runVisionOCR(buffer, mimeType) {
       {
         role: "user",
         content: [
-          { type: "input_text", text: "Lies dieses Dokument vollständig und strukturiert." },
-          { type: "input_image", image_url: dataUrl }
+          {
+            type: "input_text",
+            text:
+              "TRANSKRIBIERE den Inhalt 1:1 (keine Zusammenfassung, keine Umformulierung). " +
+              "WICHTIG: Erfasse ALLES inklusive Briefkopf/Logo, Absenderblock, Empfänger/Adressfeld, Datum, Ort, Betreff, " +
+              "Aktenzeichen/Kundennummer, Anlagen, Fußzeile, Stempel/Unterschrift. " +
+              "Gib den Text in Original-Reihenfolge aus und lass nichts weg."
+          },
+          ...content
         ]
       }
     ]
   });
 
-  const text =
-    response.output_text ||
-    response.output?.[0]?.content?.[0]?.text ||
-    "";
-
   return {
-    text: text.trim(),
-    confidence: text.length > 120 ? 0.9 : 0.5
+    source,
+    text: response.output_text || ""
   };
 }
 

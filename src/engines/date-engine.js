@@ -7,7 +7,7 @@
 // Ziel:
 // - Dokumentdatum erkennen (Rechnungsdatum, Belegdatum, Vertragsdatum)
 // - robust gegen OCR-Fehler
-// - plausibles Datum wählen
+// - Header-Datum priorisieren
 // ============================================================
 
 function normalize(text = "") {
@@ -17,7 +17,7 @@ function normalize(text = "") {
     .toLowerCase();
 }
 
-// dd.mm.yyyy | d.m.yy | yyyy-mm-dd | dd/mm/yyyy
+// dd.mm.yyyy | yyyy-mm-dd | dd/mm/yyyy
 const DATE_REGEXES = [
   /\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b/g,
   /\b(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\b/g
@@ -77,6 +77,32 @@ function detectDates(rawText = "") {
 }
 
 function detectDocumentDate(rawText = "") {
+  if (!rawText) {
+    return {
+      date: null,
+      confidence: 0,
+      source: "NoText"
+    };
+  }
+
+  // =========================================================
+  // 🆕 HEADER-DATUM PRIORITÄT (NEU)
+  // =========================================================
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const headerText = lines.slice(0, 15).join(" ");
+
+  const headerDates = detectDates(headerText);
+  if (headerDates.length) {
+    return {
+      date: headerDates[0].date,
+      confidence: 0.95,
+      source: "HeaderDate"
+    };
+  }
+
+  // =========================================================
+  // 🔴 BESTEHENDE LOGIK (UNVERÄNDERT)
+  // =========================================================
   const text = normalize(rawText);
   const candidates = detectDates(rawText);
 
@@ -88,7 +114,6 @@ function detectDocumentDate(rawText = "") {
     };
   }
 
-  // Marker-basierte Priorisierung
   let best = null;
   for (const c of candidates) {
     let score = 1;

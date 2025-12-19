@@ -13,14 +13,7 @@ function normalize(text = "") {
     .trim();
 }
 
-// ------------------------------------------------------------
-// SCORE-KATALOGE (erweitert Deutschland)
-// ------------------------------------------------------------
-
 const CATALOG = {
-  // =========================
-  // RECHNUNG
-  // =========================
   Rechnung: [
     ["rechnung", 5],
     ["rechnungsnr", 4],
@@ -37,9 +30,6 @@ const CATALOG = {
     ["leistung", 2]
   ],
 
-  // =========================
-  // KASSENBON
-  // =========================
   Kassenbon: [
     ["kassenbon", 5],
     ["bon", 4],
@@ -50,49 +40,16 @@ const CATALOG = {
     ["kartenzahlung", 2],
     ["summe", 2],
     ["mwst", 2],
-
-    // Supermärkte & Discounter
-    ["aldi", 3],
-    ["lidl", 3],
-    ["rewe", 3],
-    ["edeka", 3],
-    ["penny", 3],
-    ["netto", 3],
-    ["kaufland", 3],
-    ["norma", 3],
-
-    // Drogerien
-    ["dm", 3],
-    ["rossmann", 3],
-    ["mueller", 3],
-
-    // Fastfood & Gastro
-    ["mcdonald", 3],
-    ["burger king", 3],
-    ["kfc", 3],
-    ["subway", 3],
-    ["dominos", 3],
-    ["pizza hut", 3],
-    ["starbucks", 3],
-
-    // Shopping & Märkte
-    ["ikea", 3],
-    ["media markt", 3],
-    ["saturn", 3],
-    ["decathlon", 3],
-    ["h&m", 3],
-    ["zara", 3],
-    ["primark", 3],
-
-    // Malls
-    ["einkaufszentrum", 2],
-    ["shopping center", 2],
-    ["center", 1]
+    ["aldi", 3], ["lidl", 3], ["rewe", 3], ["edeka", 3], ["penny", 3],
+    ["netto", 3], ["kaufland", 3], ["norma", 3],
+    ["dm", 3], ["rossmann", 3], ["mueller", 3],
+    ["mcdonald", 3], ["burger king", 3], ["kfc", 3], ["subway", 3],
+    ["dominos", 3], ["pizza hut", 3], ["starbucks", 3],
+    ["ikea", 3], ["media markt", 3], ["saturn", 3], ["decathlon", 3],
+    ["h&m", 3], ["zara", 3], ["primark", 3],
+    ["einkaufszentrum", 2], ["shopping center", 2], ["center", 1]
   ],
 
-  // =========================
-  // QUITTUNG
-  // =========================
   Quittung: [
     ["quittung", 5],
     ["betrag erhalten", 4],
@@ -101,9 +58,6 @@ const CATALOG = {
     ["danke für ihren einkauf", 2]
   ],
 
-  // =========================
-  // VERTRAG
-  // =========================
   Vertrag: [
     ["vertrag", 5],
     ["vertragsnummer", 4],
@@ -116,9 +70,6 @@ const CATALOG = {
     ["bedingungen", 2]
   ],
 
-  // =========================
-  // VERSICHERUNG
-  // =========================
   Versicherung: [
     ["versicherung", 5],
     ["versicherungsnummer", 4],
@@ -126,39 +77,14 @@ const CATALOG = {
     ["beitrag", 3],
     ["jahresbeitrag", 3],
     ["schaden", 3],
-
-    // Versicherer
-    ["allianz", 4],
-    ["huk", 4],
-    ["ergo", 4],
-    ["axa", 4],
-    ["generali", 4],
-    ["r+v", 4],
-    ["wwk", 4],
-    ["signal iduna", 4],
-    ["debeka", 4],
-    ["continentale", 4],
-    ["barmenia", 4],
-    ["devk", 4],
-    ["inter", 4],
-    ["arag", 4],
-    ["lv 1871", 4],
-
-    // Online & Vergleich
-    ["check24", 3],
-    ["verivox", 3],
-    ["clark", 3],
-    ["getsafe", 3],
-    ["wefox", 3],
-
-    // Gattung
-    ["versicherung ag", 2],
-    ["versicherung a.g.", 2]
+    ["allianz", 4], ["huk", 4], ["ergo", 4], ["axa", 4], ["generali", 4],
+    ["r+v", 4], ["wwk", 4], ["signal iduna", 4], ["debeka", 4],
+    ["continentale", 4], ["barmenia", 4], ["devk", 4], ["inter", 4],
+    ["arag", 4], ["lv 1871", 4],
+    ["check24", 3], ["verivox", 3], ["clark", 3], ["getsafe", 3], ["wefox", 3],
+    ["versicherung ag", 2], ["versicherung a.g.", 2]
   ],
 
-  // =========================
-  // ABRECHNUNG
-  // =========================
   Abrechnung: [
     ["vergütungsabrechnung", 6],
     ["abrechnung", 5],
@@ -171,9 +97,6 @@ const CATALOG = {
     ["einzelvertragsnachweis", 3]
   ],
 
-  // =========================
-  // STEUER
-  // =========================
   Steuer: [
     ["finanzamt", 6],
     ["steuer", 5],
@@ -186,9 +109,6 @@ const CATALOG = {
     ["elster", 3]
   ],
 
-  // =========================
-  // MAHNUNG
-  // =========================
   Mahnung: [
     ["mahnung", 6],
     ["zahlungserinnerung", 5],
@@ -199,9 +119,6 @@ const CATALOG = {
     ["verzug", 3]
   ],
 
-  // =========================
-  // BEHOERDE
-  // =========================
   Behoerde: [
     ["bescheid", 5],
     ["aktenzeichen", 4],
@@ -223,9 +140,6 @@ const CATALOG = {
     ["ministerium", 6]
   ],
 
-  // =========================
-  // BANK
-  // =========================
   Bank: [
     ["kontoauszug", 5],
     ["iban", 3],
@@ -233,33 +147,14 @@ const CATALOG = {
     ["überweisung", 3],
     ["lastschrift", 3],
     ["bankverbindung", 3],
-
-    // Großbanken
-    ["deutsche bank", 4],
-    ["commerzbank", 4],
-    ["hypovereinsbank", 4],
+    ["deutsche bank", 4], ["commerzbank", 4], ["hypovereinsbank", 4],
     ["postbank", 4],
-
-    // Sparkassen / Genossenschaften
-    ["sparkasse", 4],
-    ["volksbank", 4],
-    ["raiffeisenbank", 4],
-    ["spardabank", 4],
-    ["landesbank", 4],
-
-    // Direktbanken
-    ["ing", 4],
-    ["dkb", 4],
-    ["n26", 4],
-    ["comdirect", 4],
-    ["consorsbank", 4],
-    ["targobank", 4]
+    ["sparkasse", 4], ["volksbank", 4], ["raiffeisenbank", 4],
+    ["spardabank", 4], ["landesbank", 4],
+    ["ing", 4], ["dkb", 4], ["n26", 4], ["comdirect", 4],
+    ["consorsbank", 4], ["targobank", 4]
   ]
 };
-
-// ------------------------------------------------------------
-// ENGINE
-// ------------------------------------------------------------
 
 function detectDocumentType(rawText = "") {
   const text = normalize(rawText);
@@ -273,7 +168,7 @@ function detectDocumentType(rawText = "") {
     scores[type] = score;
   }
 
-  let bestScore = Math.max(...Object.values(scores));
+  const bestScore = Math.max(...Object.values(scores));
   const topTypes = Object.entries(scores)
     .filter(([_, s]) => s === bestScore && s > 0)
     .map(([t]) => t);

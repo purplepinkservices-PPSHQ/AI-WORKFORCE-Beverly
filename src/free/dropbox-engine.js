@@ -9,7 +9,7 @@ const { uploadToDropbox } = require("../utils/dropbox");
 const { analyzeDocument } = require("../orchestrator/analysis-orchestrator");
 
 /* =========================================================
-   🔧 Datum normalisieren (YYYY-MM-DD)
+   Datum normalisieren (YYYY-MM-DD)
    ========================================================= */
 function normalizeDate(input) {
   if (!input) return "ohne-Datum";
@@ -25,7 +25,7 @@ function normalizeDate(input) {
 }
 
 /* =========================================================
-   🔧 Dateiname-Baustein säubern
+   Dateiname-Baustein säubern
    ========================================================= */
 function cleanPart(value, fallback) {
   if (!value) return fallback;
@@ -38,11 +38,33 @@ function cleanPart(value, fallback) {
 }
 
 /* =========================================================
-   🆕 NEU: Länge begrenzen
+   EINZIGE NEUE FUNKTION: Länge begrenzen
    ========================================================= */
 function limitLength(str, max) {
   if (!str) return str;
   return str.length > max ? str.substring(0, max) : str;
+}
+
+/* =========================================================
+   ✅ NEU (minimal): Monatsname DE
+   ========================================================= */
+function monthNameDE(dateObj) {
+  const m = dateObj.getMonth() + 1;
+  const map = {
+    1: "Januar",
+    2: "Februar",
+    3: "Maerz",
+    4: "April",
+    5: "Mai",
+    6: "Juni",
+    7: "Juli",
+    8: "August",
+    9: "September",
+    10: "Oktober",
+    11: "November",
+    12: "Dezember"
+  };
+  return map[m] || "Unklar";
 }
 
 async function handleFreeUpload(message) {
@@ -69,56 +91,67 @@ async function handleFreeUpload(message) {
   const buffer = Buffer.from(response.data);
   fs.writeFileSync(tempFilePath, buffer);
 
-  /* =========================================================
-     🔴 OCR – UNVERÄNDERT
-     ========================================================= */
+  /* OCR */
   const ocrResult = await runOCR({
     buffer,
     filePath: tempFilePath,
     mimeType
   });
 
-  /* =========================================================
-     🔴 Analyse – UNVERÄNDERT
-     ========================================================= */
-  const analysis = await analyzeDocument({
-    ocrResult
-  });
+  /* OCR Vorschau */
+  if (ocrResult && ocrResult.text) {
+    const preview = ocrResult.text.substring(0, 1500);
+
+    await message.reply(
+      `📖 **Gelesener Text (OCR-Vorschau):**\n\n` +
+      "```" +
+      preview +
+      "```"
+    );
+  } else {
+    await message.reply("❌ **OCR hat keinen Text geliefert**");
+  }
+
+  /* Analyse */
+  const analysis = await analyzeDocument({ ocrResult });
+
+  // ✅ Datum/Monat/Jahr aus erkannter Date
+  const dateObj = analysis.date ? new Date(analysis.date) : null;
+  const year = dateObj && !isNaN(dateObj.getTime()) ? String(dateObj.getFullYear()) : "2025";
+  const month = dateObj && !isNaN(dateObj.getTime()) ? monthNameDE(dateObj) : "Unklar";
 
   /* =========================================================
-     🔧 EINZIGE LOGIKÄNDERUNG: Dateiname kürzen
+     ✅ NEU: Dateiname = YYYY-MM-DD_Creditor_Subject_Person.ext
+     Betreff ohne "Betreff:" kommt aus analysis.subject
      ========================================================= */
   const safeDate = normalizeDate(analysis.date);
-  const safeType = limitLength(
-    cleanPart(analysis.type, "Unbekannt"),
-    40
-  );
+
   const safeCreditor = limitLength(
     cleanPart(analysis.creditor, "Unbekannt"),
     40
   );
+
   const safePerson = limitLength(
     cleanPart(analysis.person, "Unbekannt"),
-    40
+    25
   );
 
-  let finalFileName =
-    `${safeDate}_${safeType}_${safeCreditor}_${safePerson}` +
+  const safeSubject = limitLength(
+    cleanPart(analysis.subject, "Dokument"),
+    70
+  );
+
+  const finalFileName =
+    `${safeDate}_${safeCreditor}_${safeSubject}_${safePerson}` +
     path.extname(originalName);
 
-  // 🔧 Gesamt-Dateinamen absichern (inkl. Extension)
-  const ext = path.extname(finalFileName);
-  const base = path.basename(finalFileName, ext);
-
-  if (base.length > 180) {
-    finalFileName = base.substring(0, 180) + ext;
-  }
-
-  const folderPath = `/2025/${analysis.category || "Unklar"}/Dezember`;
-
   /* =========================================================
-     🔴 Dropbox Upload – UNVERÄNDERT
+     ✅ NEU: Ordner = /YYYY/Behoerden/Monat/Creditor/Person
      ========================================================= */
+  const safeCategory = analysis.category || "Unklar";
+  const folderPath = `/${year}/${safeCategory}/${month}/${safeCreditor}/${safePerson}`;
+
+  /* Dropbox Upload */
   await uploadToDropbox({
     buffer,
     fileName: finalFileName,
