@@ -1,158 +1,86 @@
-/**
- * ============================================================
- * Beverly AI Workforce – Discord Bot (Railway Production)
- * Phase A + B – Stable
- * ============================================================
- */
+// ============================================================
+// Beverly AI Workforce – BOT ENTRYPOINT (STABIL, DM-ONLY)
+// Datei: src/bot/index.js
+// ============================================================
+
+"use strict";
 
 require("dotenv").config();
-const express = require("express");
+
 const { Client, GatewayIntentBits, Partials } = require("discord.js");
-
-// ------------------------------------------------------------
-// ENV CHECK (KRITISCH)
-// ------------------------------------------------------------
-if (!process.env.DISCORD_BOT_TOKEN && !process.env.BOT_TOKEN) {
-    console.error("[FATAL] DISCORD_BOT_TOKEN fehlt!");
-    process.exit(1);
-}
-
-// ------------------------------------------------------------
-// EXPRESS SERVER (KEEP ALIVE FOR RAILWAY)
-// ------------------------------------------------------------
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-    res.status(200).send("Beverly AI Workforce is alive 🚀");
-});
-
-app.listen(PORT, () => {
-    console.log(`[HTTP] Express Server läuft auf Port ${PORT}`);
-});
-
-// ------------------------------------------------------------
-// SYSTEM
-// ------------------------------------------------------------
-const router = require("../system/router");
-const state = require("../core/state");
-
-// ------------------------------------------------------------
-// NOTION
-// ------------------------------------------------------------
-const { testRead } = require("../notion/read-task-engine");
-const { writeProjectMemory } = require("../notion/write-project-memory");
-
-const TASK_ENGINE_DB_ID = process.env.TASK_ENGINE_DB_ID;
-const PROJECT_MEMORY_DB_ID = process.env.PROJECT_MEMORY_DB_ID;
-
-// ------------------------------------------------------------
-// CREATOR MODULES
-// ------------------------------------------------------------
-const Verification = require("../creator/verification");
-const VerificationAI = require("../creator/verification-ai");
-const VerificationBrain = require("../creator/verification-brain");
-
-const { showCreatorMainMenu, handleCreatorMenuMessage } = require("../creator/menu");
-const { handleCreatorGeniusMessage } = require("../creator/genius");
-const { handleCreatorContentUpload } = require("../creator/content-upload");
+const { routeDM, routeReaction } = require("../system/router");
+const { registerClient } = require("../utils/messenger");
 
 // ------------------------------------------------------------
 // DISCORD CLIENT
 // ------------------------------------------------------------
+
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent
-    ],
-    partials: [
-        Partials.Channel,
-        Partials.Message,
-        Partials.User
-    ]
+  intents: [
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction]
 });
 
 // ------------------------------------------------------------
 // READY
 // ------------------------------------------------------------
-client.once("ready", async () => {
-    console.log(`🤖 Beverly Assistant Bot gestartet als: ${client.user.tag}`);
 
-    // --- Notion Test ---
-    try {
-        console.log("🔍 Starte Notion Read-Test (Task Engine) …");
-        await testRead(TASK_ENGINE_DB_ID);
-        console.log("✅ Notion Read-Test erfolgreich.");
-    } catch (err) {
-        console.error("❌ Notion Read-Test fehlgeschlagen:", err.message);
-    }
+client.once("ready", () => {
+  console.log("🚀 Bot gestartet (PRIVATE MODE)");
+  console.log(`🤖 Beverly ONLINE als ${client.user.tag}`);
 
-    // --- Memory Snapshot ---
-    try {
-        console.log("🧠 Schreibe Memory Snapshot …");
-        await writeProjectMemory({
-            databaseId: PROJECT_MEMORY_DB_ID,
-            titel: "Railway Start – Beverly online",
-            beschreibung: "Beverly läuft produktiv auf Railway.",
-            memoryTags: ["Memory Engine", "Backend / System"],
-            prioritaet: "Mittel",
-            lastContext: "Railway Boot",
-            kontextSignal: "Start",
-            kontextMatching: 95,
-            aktivierterKontext: true,
-            letzteAktion: "Gespeichert",
-            supervisorFlag: false,
-            snapshot: "Startup erfolgreich",
-            systemHinweis: "Railway Production",
-            kontext: "Automatischer Start"
-        });
-        console.log("✅ Memory Snapshot erfolgreich geschrieben.");
-    } catch (err) {
-        console.error("❌ Memory Write fehlgeschlagen:", err.message);
-    }
+  // ✅ WICHTIG: Messenger bekommt Client → sonst "Client nicht registriert"
+  registerClient(client);
 });
 
 // ------------------------------------------------------------
-// MESSAGE ROUTING (DM)
+// MESSAGE HANDLER (DM ONLY)
 // ------------------------------------------------------------
+
 client.on("messageCreate", async (message) => {
-    if (message.author.bot) return;
+  try {
+    await routeDM(message);
+  } catch (err) {
+    console.error("❌ MESSAGE HANDLER ERROR:", err);
+    try {
+      if (!message.author?.bot) {
+        await message.reply(
+          "⚠️ Kurz hakt es intern.\nSchreib bitte nochmal kurz, was du machen willst."
+        );
+      }
+    } catch (_) {}
+  }
+});
 
-    if (!message.guild) {
-        console.log("📩 DM:", message.author.username, "→", message.content);
+// ------------------------------------------------------------
+// REACTION HANDLER
+// ------------------------------------------------------------
 
-        const handled = await router.routeDM(message, {
-            Verification,
-            VerificationAI,
-            VerificationBrain,
-            showCreatorMainMenu,
-            handleCreatorMenuMessage,
-            handleCreatorGeniusMessage,
-            handleCreatorContentUpload,
-            state
-        });
-
-        return handled;
+client.on("messageReactionAdd", async (reaction, user) => {
+  try {
+    if (reaction.partial) {
+      try {
+        await reaction.fetch();
+      } catch {
+        return;
+      }
     }
+    await routeReaction(reaction, user);
+  } catch (err) {
+    console.error("❌ REACTION HANDLER ERROR:", err);
+  }
 });
 
 // ------------------------------------------------------------
 // LOGIN
 // ------------------------------------------------------------
-const TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.BOT_TOKEN;
 
-client.login(TOKEN)
-    .then(() => console.log("🚀 Beverly ist online und wartet auf DMs."))
-    .catch(err => {
-        console.error("[FATAL] Discord Login Fehler:", err.message);
-        process.exit(1);
-    });
+if (!process.env.DISCORD_TOKEN) {
+  console.error("❌ FEHLER: DISCORD_TOKEN fehlt in .env");
+  process.exit(1);
+}
 
-// ------------------------------------------------------------
-// KEEP PROCESS ALIVE (RAILWAY SAFETY NET)
-// ------------------------------------------------------------
-setInterval(() => {
-    // bewusst leer – hält Event Loop offen
-}, 60 * 1000);
+client.login(process.env.DISCORD_TOKEN);
