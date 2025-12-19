@@ -1,130 +1,108 @@
-# 🟣 AI-WORKFORCE-Beverly
+# Beverly – Free 1.0  
+**Alltags-Assistenz & Dokumenten-Intelligenz**
 
-**Beverly** ist ein modularer, KI-gestützter Discord-Assistent für  
-📁 Dokumentenmanagement · 🧠 Projekt- & Memory-Tracking · 📊 Task- & Kontextsteuerung  
-mit enger Anbindung an **Notion**, **Dropbox** und zukünftige KI-Module.
 
-Dieses Repository enthält den **stabilen Core (Phase A + B)** von Beverly.
+## Überblick
 
-## 🚀 Status
+**Beverly Free 1.0** ist eine produktive, lokal betriebene Dokumenten-Assistenz.  
+Sie nimmt Dateien über Discord entgegen, liest Inhalte per KI, erkennt Dokumentarten, extrahiert Kerndaten und legt alles **automatisch & strukturiert** in Dropbox ab.
 
-✅ **Phase A – Stabil**
+Ziel: **Ordnung, Sicherheit und Zeitgewinn** – ohne manuelle Sortierung.
 
-- Discord Bot Core
-- DM-Routing
-- Auto-Memory (Notion)
-- Manuelle Snapshots (`snapshot`, `abend`)
-- Dropbox-Initialisierung
 
-✅ **Phase B – Aktiv**
+## Aktueller Status
 
-- Projekt-Memory-Datenbank (Notion)
-- Property-Inspector
-- Saubere Property-Writes
-- Supervisor-Grundlogik
+- ✅ Stabiler Discord-Upload-Flow
+- ✅ OCR für Bilder & Scan-PDFs
+- ✅ KI-basierte Dokumentenanalyse (OpenAI)
+- ✅ Automatische Dateibenennung
+- ✅ Automatische Ordnerstruktur in Dropbox
+- ✅ Fehler- & Fallback-Logik
+- 🔒 Private-Mode (keine öffentliche Freigabe)
 
-⏳ **Phase C – in Vorbereitung**
+**Status:** Beverly Free **produktiv lauffähig (1.0)**
 
-- Task Engine Sync
-- Kontext-Routing
-- Supervisor Automationen
 
-## 🧠 Kernfunktionen
+## Funktionsumfang (Free)
 
-### 📩 Discord
+### Upload
+- Upload über Discord-DM
+- Unterstützt:
+  - JPG / PNG / WEBP
+  - PDF (Text & Scan)
 
-- Vollständiger **DM-Workflow**
-- Command-Handling:
-  - `snapshot` → Projekt-Snapshot
-  - `abend` → Tagesabschluss
-  - `menu` → Creator-Menü
-- Debug-Logging für alle Events
+### Analyse (KI)
+Beverly erkennt u. a.:
 
-### 🧠 Notion
+- Dokumenttyp (Rechnung, Mahnung, Vertrag, Bescheid, Versicherung, Arzt, Bank, Behörde …)
+- Datum
+- Gläubiger / Absender
+- Zugeordnete Person (User / Haushalt)
+- Kategorie
 
-- **Task Engine (Read)**
-- **Project Memory Database (Write)**
-- Automatische Property-Erkennung
-- Stabiler Write-Flow (keine Validation Errors)
+### Dateiname (automatisch)
 
-### 📁 Dropbox
+YYYY-MM-DD_TYP_GLAEUBIGER_PERSON.ext
 
-- Automatische Initialisierung der Beverly-Ordnerstruktur
-- Wiederanlaufsicher (existierende Ordner werden erkannt)
 
-## 📂 Projektstruktur
+Beispiel:
+2025-12-18_Rechnung_Zahnarzt_Maxi.pdf
+
+
+### Ablagestruktur (Dropbox)
+
+/YYYY/KATEGORIE/MONAT/YYYY-MM-DD_TYP_GLAEUBIGER_PERSON.ext
+
+
+Beispiel:
+/2025/Gesundheit/Dezember/2025-12-18_Rechnung_Zahnarzt_Maxi.pdf
+
+
+## Technischer Stack
+
+- Node.js
+- Discord.js
+- OpenAI API (Text & Vision)
+- Dropbox API
+- Axios
+- Lokale Ordnerstruktur
+- Modularer Engine-Aufbau
+
+
+## Projektstruktur (relevant)
 
 src/
-├─ bot/ → Discord Bot (index.js)
-├─ system/ → Router, Task Queue
-├─ memory/ → Memory Engine (Discord → Notion)
-├─ notion/ → Notion Client + DB Logic
-├─ cloud/ → Dropbox Integration
-├─ creator/ → Creator & Verification Flows
-├─ finance/ → Haushalts- & Finanzlogik
-└─ core/ → Globaler State
-
-## ⚙️ Installation
-
-### 1️⃣ Repository klonen
-
-git clone https://github.com/purplepinkservices-PPSHQ/larry-assistant-bot.git
-cd larry-assistant-bot
-
-2️⃣ Abhängigkeiten installieren
-
-npm install
-
-3️⃣ .env anlegen
-env
-
-DISCORD_BOT_TOKEN=xxxxxxxx
-NOTION_API_KEY=secret_xxxxxxxx
-PROJECT_MEMORY_DB_ID=xxxxxxxx
-TASK_ENGINE_DB_ID=xxxxxxxx
-DROPBOX_ACCESS_TOKEN=xxxxxxxx
-
-4️⃣ Bot starten
-bash
-Code kopieren
-npm start
-
-🧪 Teststatus
-Beim Start müssen folgende Logs erscheinen:
-
-📁 Dropbox bereit.
-📊 Task Engine Treffer: 1
-🧠 Memory Snapshot erfolgreich geschrieben.
-📩 messageCreate FIRED …
-
-Wenn das der Fall ist → System stabil ✅
-
-🧭 Architektur-Prinzipien
-
-Keine Snippets – immer vollständige Dateien
-
-Kein Blind-Write – Property-Inspection vor Writes
-
-Nicht blockierend – Auto-Memory läuft async
-
-Supervisor-fähig – vorbereitet für Automationen
-
-🛣️ Roadmap (Kurz)
-
-Phase C: Task Engine Write
-
-Phase D: Kontext-Matching
-
-Phase E: Supervisor Scheduler
-
-Phase F: Railway Deployment
-
-Phase G: Multi-User Testbetrieb
-
-🟣 Lizenz
-Internes Projekt von PPSHQ – Purple Pink Services
-Alle Rechte vorbehalten.
+├─ bot/ # Discord Bot Einstieg
+├─ free/ # Free Beverly Flow
+├─ orchestrator/ # Analyse-Koordination
+├─ engines/ # Fachlogik (Datum, Typ, Person, Gläubiger)
+├─ keywords/ # Keyword-Indizes
+├─ utils/ # OCR, Dropbox, PDF Handling
+├─ system/ # Router & State
+└─ private/ # Erweiterungen (nicht aktiv)
 
 
+## Entwicklungsphilosophie
+
+- **Stabilität vor Features**
+- **Keine Magie, klare Logik**
+- **Alles nachvollziehbar**
+- **Erweiterbar ohne Rewrite**
+
+Beverly ist kein Experiment – sie ist ein **System**.
+
+## Roadmap (nächste Schritte)
+
+- Feintuning der Erkennungslogik
+- Mehr Kategorien & Keywords
+- Pro-Features (History, Suche, Regeln)
+- Multi-User-Haushalte
+- Vollständige UI-Anbindung
+
+## Hinweis
+
+Dieses Repository bildet den Stand **Beverly Free 1.0** ab.  
+Weitere Module (Pro, Business, Private) werden **separat** entwickelt.
 
 
+**Beverly ordnet dein Leben.**
