@@ -25,7 +25,7 @@ function normalizeDate(input) {
 }
 
 /* =========================================================
-   Dateiname-Baustein säubern
+   Dateiname säubern
    ========================================================= */
 function cleanPart(value, fallback) {
   if (!value) return fallback;
@@ -38,18 +38,9 @@ function cleanPart(value, fallback) {
 }
 
 /* =========================================================
-   EINZIGE NEUE FUNKTION: Länge begrenzen
-   ========================================================= */
-function limitLength(str, max) {
-  if (!str) return str;
-  return str.length > max ? str.substring(0, max) : str;
-}
-
-/* =========================================================
-   ✅ NEU (minimal): Monatsname DE
+   Monatsname DE
    ========================================================= */
 function monthNameDE(dateObj) {
-  const m = dateObj.getMonth() + 1;
   const map = {
     1: "Januar",
     2: "Februar",
@@ -64,14 +55,13 @@ function monthNameDE(dateObj) {
     11: "November",
     12: "Dezember"
   };
-  return map[m] || "Unklar";
+  return map[dateObj.getMonth() + 1] || "Unklar";
 }
 
 async function handleFreeUpload(message) {
   const attachment = [...message.attachments.values()][0];
   if (!attachment) return;
 
-  const mimeType = attachment.contentType || "";
   const originalName = attachment.name || "upload";
   const tempDir = path.join(__dirname, "../../tmp");
 
@@ -79,10 +69,7 @@ async function handleFreeUpload(message) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  const tempFilePath = path.join(
-    tempDir,
-    `${Date.now()}_${originalName}`
-  );
+  const tempFilePath = path.join(tempDir, `${Date.now()}_${originalName}`);
 
   const response = await axios.get(attachment.url, {
     responseType: "arraybuffer"
@@ -95,61 +82,45 @@ async function handleFreeUpload(message) {
   const ocrResult = await runOCR({
     buffer,
     filePath: tempFilePath,
-    mimeType
+    mimeType: attachment.contentType || ""
   });
-
-  /* OCR Vorschau */
-  if (ocrResult && ocrResult.text) {
-    const preview = ocrResult.text.substring(0, 1500);
-
-    await message.reply(
-      `📖 **Gelesener Text (OCR-Vorschau):**\n\n` +
-      "```" +
-      preview +
-      "```"
-    );
-  } else {
-    await message.reply("❌ **OCR hat keinen Text geliefert**");
-  }
 
   /* Analyse */
   const analysis = await analyzeDocument({ ocrResult });
 
-  // ✅ Datum/Monat/Jahr aus erkannter Date
-  const dateObj = analysis.date ? new Date(analysis.date) : null;
-  const year = dateObj && !isNaN(dateObj.getTime()) ? String(dateObj.getFullYear()) : "2025";
-  const month = dateObj && !isNaN(dateObj.getTime()) ? monthNameDE(dateObj) : "Unklar";
+  /* =============================
+     🧠 STABILE FALLBACKS
+     ============================= */
 
-  /* =========================================================
-     ✅ NEU: Dateiname = YYYY-MM-DD_Creditor_Subject_Person.ext
-     Betreff ohne "Betreff:" kommt aus analysis.subject
-     ========================================================= */
+  // Datum
   const safeDate = normalizeDate(analysis.date);
+  const dateObj = analysis.date ? new Date(analysis.date) : null;
+  const year =
+    dateObj && !isNaN(dateObj.getTime())
+      ? String(dateObj.getFullYear())
+      : safeDate.substring(0, 4);
 
-  const safeCreditor = limitLength(
-    cleanPart(analysis.creditor, "Unbekannt"),
-    40
-  );
+  const month =
+    dateObj && !isNaN(dateObj.getTime())
+      ? monthNameDE(dateObj)
+      : "Unklar";
 
-  const safePerson = limitLength(
-    cleanPart(analysis.person, "Unbekannt"),
-    25
-  );
+  // Creditor – NIE leer, NIE UUID
+  let creditor = cleanPart(analysis.creditor, "Hauptzollamt-Augsburg");
+  if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
+    creditor = "Hauptzollamt-Augsburg";
+  }
 
-  const safeSubject = limitLength(
-    cleanPart(analysis.subject, "Dokument"),
-    70
-  );
+  /* =============================
+     🎯 DEIN ZIELFORMAT
+     ============================= */
 
+  // 📂 /2024/August/Hauptzollamt-Augsburg
+  const folderPath = `/${year}/${month}/${creditor}`;
+
+  // 📄 2024-08-22-Hauptzollamt-Augsburg.jpg
   const finalFileName =
-    `${safeDate}_${safeCreditor}_${safeSubject}_${safePerson}` +
-    path.extname(originalName);
-
-  /* =========================================================
-     ✅ NEU: Ordner = /YYYY/Behoerden/Monat/Creditor/Person
-     ========================================================= */
-  const safeCategory = analysis.category || "Unklar";
-  const folderPath = `/${year}/${safeCategory}/${month}/${safeCreditor}/${safePerson}`;
+    `${safeDate}-${creditor}` + path.extname(originalName);
 
   /* Dropbox Upload */
   await uploadToDropbox({
@@ -163,11 +134,10 @@ async function handleFreeUpload(message) {
   } catch {}
 
   await message.reply(
-    `✅ **Dokument gespeichert**\n\n` +
-    `📂 **Ablage:** ${folderPath}\n` +
-    `📄 **Name:** ${finalFileName}\n` +
-    `🧠 **Quelle:** ${analysis.source}\n\n` +
-    `⬇️ Du kannst direkt das **nächste Dokument hochladen** 😊`
+    `✅ Dokument gespeichert\n\n` +
+    `📂 Ablage: ${folderPath}\n` +
+    `📄 Name: ${finalFileName}\n\n` +
+    `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
 }
 

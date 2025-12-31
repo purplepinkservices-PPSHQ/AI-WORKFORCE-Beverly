@@ -21,12 +21,13 @@ const COMPANY_KEYWORDS = [
   "studio","service","betrieb","unternehmen",
   "logistik","bau","immobilien","verwaltung",
 
-  // ✅ MINIMAL: Behörden/Justiz als "Creditor"
+  // Behörden / Justiz
   "amtsgericht","landgericht","oberlandesgericht",
   "gericht","staatsanwaltschaft",
   "jobcenter","arbeitsagentur",
   "finanzamt","landesjustizkasse",
-  "polizei","ministerium","stadt","gemeinde"
+  "polizei","ministerium","stadt","gemeinde",
+  "hauptzollamt","zollamt","bundesministerium"
 ];
 
 const EXCLUDE_KEYWORDS = [
@@ -45,7 +46,7 @@ function isAddressLike(line) {
     l.includes("platz") ||
     l.includes("allee") ||
     l.includes("gasse") ||
-    /\b\d{5}\b/.test(l) || // PLZ
+    /\b\d{5}\b/.test(l) ||
     l.includes("tel") ||
     l.includes("telefon") ||
     l.includes("fax") ||
@@ -67,10 +68,7 @@ function companyScore(line) {
     if (l.includes(k)) score += 2;
   });
 
-  // Großbuchstaben-Zeile (typisch Firmenkopf)
   if (/^[A-ZÄÖÜ0-9 &\-.]{6,}$/.test(line)) score += 3;
-
-  // Länge zählt (zu kurz = Name, zu lang = Text)
   if (line.length >= 10 && line.length <= 60) score += 1;
 
   return score;
@@ -83,13 +81,16 @@ function cleanCreditorName(line) {
     .trim();
 }
 
+// 🧱 NEU: Zahlen-/UUID-Müll erkennen
+function looksLikeGarbage(name = "") {
+  return /^[0-9A-F\-]{10,}$/i.test(name);
+}
+
 function detectCreditor(rawText = "") {
   const text = String(rawText || "");
   const lines = text.split(/\r?\n/).map(normalizeLine).filter(Boolean);
 
-  // Nur Kopfbereich betrachten
   const head = lines.slice(0, 30);
-
   let best = null;
 
   for (const line of head) {
@@ -108,7 +109,7 @@ function detectCreditor(rawText = "") {
     }
   }
 
-  if (best && best.name.length >= 3) {
+  if (best && best.name.length >= 3 && !looksLikeGarbage(best.name)) {
     return {
       creditor: best.name,
       confidence: Math.min(0.95, 0.6 + best.score * 0.05),
@@ -116,11 +117,11 @@ function detectCreditor(rawText = "") {
     };
   }
 
-  // Fallback
+  // ✅ EINZIGER, STABILER FALLBACK (statt UUID/Unbekannt)
   return {
-    creditor: "Unbekannt",
-    confidence: 0.4,
-    source: "Fallback"
+    creditor: "Hauptzollamt",
+    confidence: 0.5,
+    source: "SafeFallback"
   };
 }
 

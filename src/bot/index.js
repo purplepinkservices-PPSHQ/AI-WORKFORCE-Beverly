@@ -32,7 +32,7 @@ client.once("ready", () => {
   console.log("🚀 Bot gestartet (PRIVATE MODE)");
   console.log(`🤖 Beverly ONLINE als ${client.user.tag}`);
 
-  // ✅ WICHTIG: Messenger bekommt Client → sonst "Client nicht registriert"
+  // Messenger bekommt Client (wichtig für Replies / Reactions)
   registerClient(client);
 });
 
@@ -48,7 +48,7 @@ client.on("messageCreate", async (message) => {
     try {
       if (!message.author?.bot) {
         await message.reply(
-          "⚠️ Kurz hakt es intern.\nSchreib bitte nochmal kurz, was du machen willst."
+          "⚠️ Kurz hakt es intern.\nBitte schick das Dokument nochmal."
         );
       }
     } catch (_) {}
