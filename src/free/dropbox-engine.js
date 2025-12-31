@@ -1,3 +1,6 @@
+// ============================================================
+// Datei: src/free/dropbox-engine.js
+// ============================================================
 "use strict";
 
 const fs = require("fs");
@@ -85,10 +88,10 @@ async function handleFreeUpload(message) {
     mimeType: attachment.contentType || ""
   });
 
-  /* Analyse */
+  /* Analyse (kompatibel: {analysis,module} ODER direkt analysis) */
   const result = await analyzeDocument({ ocrResult });
-  const analysis = result.analysis || result;
-  const moduleResult = result.module || null;
+  const analysis = result?.analysis || result;
+  const moduleResult = result?.module || null;
 
   /* =============================
      🧠 STABILE FALLBACKS
@@ -107,18 +110,17 @@ async function handleFreeUpload(message) {
       ? monthNameDE(dateObj)
       : "Unklar";
 
-  let creditor = cleanPart(analysis.creditor, "Hauptzollamt-Augsburg");
+  let creditor = cleanPart(analysis.creditor, "Unbekannt");
   if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
-    creditor = "Hauptzollamt-Augsburg";
+    creditor = "Unbekannt";
   }
 
   /* =============================
-     🎯 ZIELFORMAT (UNVERÄNDERT)
+     🎯 ZIELFORMAT
      ============================= */
 
   const folderPath = `/${year}/${month}/${creditor}`;
-  const finalFileName =
-    `${safeDate}-${creditor}` + path.extname(originalName);
+  const finalFileName = `${safeDate}-${creditor}` + path.extname(originalName);
 
   /* Dropbox Upload */
   await uploadToDropbox({
@@ -131,28 +133,29 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
-  const savedMsg = await message.reply(
+  await message.reply(
     `✅ Dokument gespeichert\n\n` +
-    `📂 Ablage: ${folderPath}\n` +
-    `📄 Name: ${finalFileName}\n\n` +
-    `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
+      `📂 Ablage: ${folderPath}\n` +
+      `📄 Name: ${finalFileName}\n\n` +
+      `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
 
   /* =========================================================
-     🧩 NEU: MODUL-FEEDBACK + REACTIONS (ADD-ON)
+     🧩 MODUL-FEEDBACK (NICHT BLOCKIEREND)
+     - KEIN "nur ablegen" mehr (ist ja schon gespeichert)
+     - nur ✍️ Reaction + Text-Hinweis
      ========================================================= */
   if (moduleResult && moduleResult.message) {
     const m = await message.reply(
       `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +
-      moduleResult.message +
-      `\n\nWas soll ich für dich tun?`
+        moduleResult.message +
+        `\n\n✍️ **Reagiere mit** ✍️ **(Antwort verfassen)**, wenn ich dir beim Schreiben helfen soll.\n` +
+        `📎 Du kannst auch jederzeit direkt ein weiteres Dokument hochladen.`
     );
 
-    if (Array.isArray(moduleResult.reactions)) {
-      for (const r of moduleResult.reactions) {
-        try { await m.react(r); } catch {}
-      }
-    }
+    try {
+      await m.react("✍️");
+    } catch {}
   }
 }
 

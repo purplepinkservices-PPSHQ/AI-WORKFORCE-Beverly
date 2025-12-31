@@ -1,16 +1,20 @@
+// ============================================================
+// Datei: src/system/router.js
+// ============================================================
 "use strict";
 
 const { runOnboarding } = require("../free/onboarding-engine");
 const { handleFreeUpload } = require("../free/dropbox-engine");
 const { getState } = require("./state");
 
-// Optional: falls du Reaction-Flow drin hast
+// ✅ Reactions: direkt anbinden (ohne extra Abhängigkeit)
 let routeReaction = async () => {};
 try {
-  const m = require("./reaction-router");
-  routeReaction = m.routeReaction || routeReaction;
+  const r = require("../free/reaction-correction-engine");
+  routeReaction =
+    r.routeReaction || r.handleReaction || r.onReaction || r.default || routeReaction;
 } catch {
-  // ok
+  // ok – Reactions optional
 }
 
 async function routeDM(message) {
@@ -34,7 +38,7 @@ async function routeDM(message) {
       return;
     }
 
-    // 3️⃣ Auswahlantworten ignorieren (werden woanders verarbeitet)
+    // 3️⃣ Zahl-Antworten ignorieren (werden woanders verarbeitet)
     if (/^[1-4]$/.test(content)) return;
 
     // 4️⃣ Fallback

@@ -1,8 +1,7 @@
 // ============================================================
-// Beverly AI Workforce – BOT ENTRYPOINT (STABIL, DM-ONLY)
 // Datei: src/bot/index.js
+// (unverändert – vollständig)
 // ============================================================
-
 "use strict";
 
 require("dotenv").config();
@@ -32,7 +31,6 @@ client.once("ready", () => {
   console.log("🚀 Bot gestartet (PRIVATE MODE)");
   console.log(`🤖 Beverly ONLINE als ${client.user.tag}`);
 
-  // Messenger bekommt Client (wichtig für Replies / Reactions)
   registerClient(client);
 });
 
@@ -47,9 +45,7 @@ client.on("messageCreate", async (message) => {
     console.error("❌ MESSAGE HANDLER ERROR:", err);
     try {
       if (!message.author?.bot) {
-        await message.reply(
-          "⚠️ Kurz hakt es intern.\nBitte schick das Dokument nochmal."
-        );
+        await message.reply("⚠️ Kurz hakt es intern.\nBitte schick das Dokument nochmal.");
       }
     } catch (_) {}
   }
