@@ -86,15 +86,17 @@ async function handleFreeUpload(message) {
   });
 
   /* Analyse */
-  const analysis = await analyzeDocument({ ocrResult });
+  const result = await analyzeDocument({ ocrResult });
+  const analysis = result.analysis || result;
+  const moduleResult = result.module || null;
 
   /* =============================
      🧠 STABILE FALLBACKS
      ============================= */
 
-  // Datum
   const safeDate = normalizeDate(analysis.date);
   const dateObj = analysis.date ? new Date(analysis.date) : null;
+
   const year =
     dateObj && !isNaN(dateObj.getTime())
       ? String(dateObj.getFullYear())
@@ -105,20 +107,16 @@ async function handleFreeUpload(message) {
       ? monthNameDE(dateObj)
       : "Unklar";
 
-  // Creditor – NIE leer, NIE UUID
   let creditor = cleanPart(analysis.creditor, "Hauptzollamt-Augsburg");
   if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
     creditor = "Hauptzollamt-Augsburg";
   }
 
   /* =============================
-     🎯 DEIN ZIELFORMAT
+     🎯 ZIELFORMAT (UNVERÄNDERT)
      ============================= */
 
-  // 📂 /2024/August/Hauptzollamt-Augsburg
   const folderPath = `/${year}/${month}/${creditor}`;
-
-  // 📄 2024-08-22-Hauptzollamt-Augsburg.jpg
   const finalFileName =
     `${safeDate}-${creditor}` + path.extname(originalName);
 
@@ -133,12 +131,29 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
-  await message.reply(
+  const savedMsg = await message.reply(
     `✅ Dokument gespeichert\n\n` +
     `📂 Ablage: ${folderPath}\n` +
     `📄 Name: ${finalFileName}\n\n` +
     `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
+
+  /* =========================================================
+     🧩 NEU: MODUL-FEEDBACK + REACTIONS (ADD-ON)
+     ========================================================= */
+  if (moduleResult && moduleResult.message) {
+    const m = await message.reply(
+      `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +
+      moduleResult.message +
+      `\n\nWas soll ich für dich tun?`
+    );
+
+    if (Array.isArray(moduleResult.reactions)) {
+      for (const r of moduleResult.reactions) {
+        try { await m.react(r); } catch {}
+      }
+    }
+  }
 }
 
 module.exports = { handleFreeUpload };

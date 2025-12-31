@@ -6,6 +6,9 @@ const { detectPerson } = require("../engines/person-engine");
 const { detectDocumentDate } = require("../engines/date-engine");
 const { detectCategoryFromKeywords } = require("../keywords");
 
+// 🧱 Modul legal-lawyer (ADD-ON)
+const legalLawyer = require("../modules/legal-lawyer");
+
 /* =========================================================
    🔧 MINIMAL: Authority/Behörden Keywords
    ========================================================= */
@@ -22,7 +25,12 @@ const AUTHORITY_KEYWORDS = [
   "ministerium",
   "stadt",
   "gemeinde",
-  "gericht"
+  "gericht",
+  "gerichtsvollzieher",
+  "pfändung",
+  "mahnung",
+  "vollstreckung",
+  "ordnungsamt"
 ];
 
 function hasAuthorityKeyword(text = "") {
@@ -34,15 +42,16 @@ function hasAuthorityKeyword(text = "") {
    🔧 MINIMAL: Betreff extrahieren
    ========================================================= */
 function extractSubject(rawText = "") {
-  const lines = String(rawText).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = String(rawText)
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
 
-  // Suche gezielt nach "Betreff:"
   for (const line of lines.slice(0, 40)) {
     const m = line.match(/^betreff\s*[:\-]\s*(.+)$/i);
     if (m && m[1]) return m[1].trim();
   }
 
-  // Fallback: "Betreff" irgendwo in der Zeile (OCR-Varianten)
   const joined = lines.slice(0, 60).join(" ");
   const m2 = joined.match(/\bbetreff\s*[:\-]\s*(.{5,160})/i);
   if (m2 && m2[1]) return m2[1].trim();
@@ -50,6 +59,22 @@ function extractSubject(rawText = "") {
   return null;
 }
 
+/* =========================================================
+   ✅ MINIMAL FIX: Datum robust lesen (date / value / raw)
+   ========================================================= */
+function pickDate(dateResult) {
+  return (
+    dateResult?.date ||
+    dateResult?.value ||
+    dateResult?.raw ||
+    null
+  );
+}
+
+/* =========================================================
+   🧠 ANALYSE (RETURN WIE FRÜHER: NUR ANALYSIS-OBJEKT)
+   + Modul optional als analysis.module
+   ========================================================= */
 async function analyzeDocument({ ocrResult }) {
   const rawText = (ocrResult?.text || "").trim();
 
@@ -62,7 +87,6 @@ async function analyzeDocument({ ocrResult }) {
   const personResult = detectPerson(rawText);
   const dateResult = detectDocumentDate(rawText);
 
-  // ✅ MINIMAL: Behörde erzwingen, wenn Authority Keywords gefunden werden
   const authorityHit = hasAuthorityKeyword(headerText + "\n" + rawText);
 
   const safeType = typeResult?.type || "Unklar";
@@ -74,10 +98,11 @@ async function analyzeDocument({ ocrResult }) {
 
   if (authorityHit) safeCategory = "Behoerden";
 
-  const safeDate = dateResult?.date || null;
+  const safeDate = pickDate(dateResult);
   const subject = extractSubject(rawText);
 
-  return {
+  // ✅ RETURN-FORMAT WIE VORHER (analysis direkt!)
+  const analysis = {
     type: safeType,
     category: safeCategory,
     date: safeDate,
@@ -91,6 +116,26 @@ async function analyzeDocument({ ocrResult }) {
       personResult?.confidence || 0.5
     )
   };
+
+  /* =========================================================
+     🧩 MODUL (ADD-ON) – OHNE PIPELINE ZU ÄNDERN
+     ========================================================= */
+  if (legalLawyer && typeof legalLawyer.matches === "function") {
+    try {
+      if (legalLawyer.matches(analysis, rawText)) {
+        const result = legalLawyer.analyze(analysis, rawText);
+        analysis.module = {
+          id: legalLawyer.id,
+          message: legalLawyer.feedback(result),
+          reactions: ["✍️", "📂"] // Antwort verfassen | nur ablegen
+        };
+      }
+    } catch {
+      // Modul darf Free niemals crashen
+    }
+  }
+
+  return analysis;
 }
 
 module.exports = { analyzeDocument };
