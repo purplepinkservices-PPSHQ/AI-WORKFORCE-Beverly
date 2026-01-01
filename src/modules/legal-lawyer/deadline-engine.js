@@ -3,10 +3,8 @@
 function detectDeadline(rawText = "") {
   const text = rawText.toLowerCase();
 
-  // konkretes Datum
-  const dateMatch = text.match(
-    /\b(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})\b/
-  );
+  const dateMatch =
+    text.match(/\b(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})\b/);
 
   if (dateMatch) {
     const d = new Date(
@@ -14,13 +12,11 @@ function detectDeadline(rawText = "") {
       Number(dateMatch[2]) - 1,
       Number(dateMatch[1])
     );
-    if (!isNaN(d.getTime())) {
-      return build(d, "konkretes Datum");
-    }
+    if (!isNaN(d.getTime())) return build(d, "konkretes Datum");
   }
 
-  // relative Frist
-  const rel = text.match(/(innerhalb|binnen)\s+von\s+(\d{1,3})\s+tagen/);
+  const rel =
+    text.match(/(innerhalb|binnen)\s+von\s+(\d{1,3})\s+tagen/);
   if (rel) {
     const days = Number(rel[2]);
     const d = new Date();

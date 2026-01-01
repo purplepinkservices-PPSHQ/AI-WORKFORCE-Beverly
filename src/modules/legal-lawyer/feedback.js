@@ -8,7 +8,6 @@ function feedback(result) {
     "🧠 **Kurz erklärt:**\n" +
     "Dieses Schreiben fordert dich zu einer Handlung auf.\n\n";
 
-  // ⏰ Fristen
   if (result.deadline?.found) {
     if (result.deadline.date) {
       text +=
@@ -27,7 +26,6 @@ function feedback(result) {
     }
   }
 
-  // 💰 Beträge
   if (result.amounts?.found) {
     text +=
       "💰 **Geforderter Betrag:**\n" +
@@ -35,8 +33,7 @@ function feedback(result) {
   }
 
   text +=
-    "✍️ Reagiere mit **Antwort verfassen**, wenn ich dir beim Schreiben helfen soll.\n" +
-    "📎 Du kannst jederzeit direkt ein weiteres Dokument hochladen.";
+    "✍️ Reagiere mit **Antwort verfassen**, wenn ich dir beim Schreiben helfen soll.";
 
   return text;
 }

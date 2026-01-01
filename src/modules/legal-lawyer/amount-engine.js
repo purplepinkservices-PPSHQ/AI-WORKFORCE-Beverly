@@ -1,14 +1,7 @@
 "use strict";
 
-/**
- * Erkennt Geldbeträge in Behörden- & Rechtstexten
- */
-
 function detectAmounts(rawText = "") {
-  const text = rawText
-    .replace(/\s+/g, " ")
-    .replace(/€/g, " EUR");
-
+  const text = rawText.replace(/\s+/g, " ").replace(/€/g, " EUR");
   const amounts = [];
 
   const regex =
@@ -17,24 +10,15 @@ function detectAmounts(rawText = "") {
   let match;
   while ((match = regex.exec(text)) !== null) {
     const raw = match[1];
-    const value = parseFloat(
-      raw.replace(/\./g, "").replace(",", ".")
-    );
-
-    if (!isNaN(value)) {
-      amounts.push(value);
-    }
+    const value = parseFloat(raw.replace(/\./g, "").replace(",", "."));
+    if (!isNaN(value)) amounts.push(value);
   }
 
-  if (amounts.length === 0) {
-    return { found: false };
-  }
-
-  const total = Math.max(...amounts);
+  if (amounts.length === 0) return { found: false };
 
   return {
     found: true,
-    total,
+    total: Math.max(...amounts),
     currency: "EUR",
     all: amounts
   };

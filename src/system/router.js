@@ -1,21 +1,21 @@
-// ============================================================
-// Datei: src/system/router.js
-// ============================================================
 "use strict";
 
 const { runOnboarding } = require("../free/onboarding-engine");
 const { handleFreeUpload } = require("../free/dropbox-engine");
 const { getState } = require("./state");
+const legalLawyer = require("../modules/legal-lawyer");
 
-// ✅ Reactions: direkt anbinden (ohne extra Abhängigkeit)
+// Reactions (bestehend, unverändert)
 let routeReaction = async () => {};
 try {
   const r = require("../free/reaction-correction-engine");
   routeReaction =
-    r.routeReaction || r.handleReaction || r.onReaction || r.default || routeReaction;
-} catch {
-  // ok – Reactions optional
-}
+    r.routeReaction ||
+    r.handleReaction ||
+    r.onReaction ||
+    r.default ||
+    routeReaction;
+} catch {}
 
 async function routeDM(message) {
   try {
@@ -26,22 +26,37 @@ async function routeDM(message) {
     const userId = message.author.id;
     const content = message.content?.trim();
 
-    // 1️⃣ ONBOARDING HAT IMMER PRIORITÄT
+    // 1️⃣ Onboarding
     const onboardingHandled = await runOnboarding(message);
     if (onboardingHandled) return;
 
     const state = getState(userId);
 
-    // 2️⃣ Uploads nur NACH Onboarding
+    // 2️⃣ Upload
     if (state.onboarded && message.attachments?.size > 0) {
       await handleFreeUpload(message);
       return;
     }
 
-    // 3️⃣ Zahl-Antworten ignorieren (werden woanders verarbeitet)
-    if (/^[1-4]$/.test(content)) return;
+    // 3️⃣ ✍️ Emoji → Antwort-Menü (LEGAL-LAWYER)
+    if (content === "✍️") {
+      const menu = legalLawyer.replyMenu?.();
+      if (menu) {
+        await message.reply(menu);
+        return;
+      }
+    }
 
-    // 4️⃣ Fallback
+    // 4️⃣ Auswahl 1–5 → legal-lawyer
+    if (/^[1-5]$/.test(content)) {
+      const res = legalLawyer.handleReplyRequest(content);
+      if (res && res.message) {
+        await message.reply(res.message);
+        return;
+      }
+    }
+
+    // 5️⃣ Fallback
     if (content) {
       await message.reply(
         "👍 Alles klar.\n📄 Du kannst mir jederzeit ein weiteres Dokument schicken – ich bin bereit 😊"
