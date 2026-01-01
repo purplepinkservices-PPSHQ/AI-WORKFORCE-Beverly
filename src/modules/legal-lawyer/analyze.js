@@ -1,7 +1,10 @@
 "use strict";
 
-function analyze(analysis, ocrText = "") {
-  const text = ocrText.toLowerCase();
+const { detectDeadline } = require("./deadline-engine");
+const { detectAmounts } = require("./amount-engine");
+
+function analyze(analysis, rawText = "") {
+  const text = rawText.toLowerCase();
 
   let type = "Behördenpost";
   if (text.includes("mahnung")) type = "Mahnschreiben";
@@ -10,10 +13,15 @@ function analyze(analysis, ocrText = "") {
   if (text.includes("bescheid")) type = "Bescheid";
   if (text.includes("anhörung")) type = "Anhörung";
 
+  const deadline = detectDeadline(rawText);
+  const amounts = detectAmounts(rawText);
+
   return {
     type,
     creditor: analysis.creditor || "Behörde",
-    date: analysis.date || null
+    date: analysis.date || null,
+    deadline,
+    amounts
   };
 }
 
