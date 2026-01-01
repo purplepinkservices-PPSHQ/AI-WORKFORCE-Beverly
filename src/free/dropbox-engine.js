@@ -72,7 +72,10 @@ async function handleFreeUpload(message) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  const tempFilePath = path.join(tempDir, `${Date.now()}_${originalName}`);
+  const tempFilePath = path.join(
+    tempDir,
+    `${Date.now()}_${originalName}`
+  );
 
   const response = await axios.get(attachment.url, {
     responseType: "arraybuffer"
@@ -88,10 +91,10 @@ async function handleFreeUpload(message) {
     mimeType: attachment.contentType || ""
   });
 
-  /* Analyse (kompatibel: {analysis,module} ODER direkt analysis) */
+  /* Analyse */
   const result = await analyzeDocument({ ocrResult });
-  const analysis = result?.analysis || result;
-  const moduleResult = result?.module || null;
+  const analysis = result.analysis || result;
+  const moduleResult = result.module || null;
 
   /* =============================
      🧠 STABILE FALLBACKS
@@ -110,17 +113,23 @@ async function handleFreeUpload(message) {
       ? monthNameDE(dateObj)
       : "Unklar";
 
-  let creditor = cleanPart(analysis.creditor, "Unbekannt");
+  let creditor = cleanPart(
+    analysis.creditor,
+    "Unbekannt"
+  );
+
   if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
     creditor = "Unbekannt";
   }
 
   /* =============================
-     🎯 ZIELFORMAT
+     🎯 NEUES ZIELFORMAT
+     📂 /YYYY/Monat
      ============================= */
 
-  const folderPath = `/${year}/${month}/${creditor}`;
-  const finalFileName = `${safeDate}-${creditor}` + path.extname(originalName);
+  const folderPath = `/${year}/${month}`;
+  const finalFileName =
+    `${safeDate}-${creditor}` + path.extname(originalName);
 
   /* Dropbox Upload */
   await uploadToDropbox({
@@ -135,22 +144,21 @@ async function handleFreeUpload(message) {
 
   await message.reply(
     `✅ Dokument gespeichert\n\n` +
-      `📂 Ablage: ${folderPath}\n` +
-      `📄 Name: ${finalFileName}\n\n` +
-      `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
+    `📂 Ablage: ${folderPath}\n` +
+    `📄 Name: ${finalFileName}\n\n` +
+    `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
 
-  /* =========================================================
-     🧩 MODUL-FEEDBACK (NICHT BLOCKIEREND)
-     - KEIN "nur ablegen" mehr (ist ja schon gespeichert)
-     - nur ✍️ Reaction + Text-Hinweis
-     ========================================================= */
+  /* =============================
+     🧩 MODUL-FEEDBACK (nicht blockierend)
+     ============================= */
+
   if (moduleResult && moduleResult.message) {
     const m = await message.reply(
       `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +
-        moduleResult.message +
-        `\n\n✍️ **Reagiere mit** ✍️ **(Antwort verfassen)**, wenn ich dir beim Schreiben helfen soll.\n` +
-        `📎 Du kannst auch jederzeit direkt ein weiteres Dokument hochladen.`
+      moduleResult.message +
+      `\n\n✍️ Möchtest du, dass ich eine Antwort für dich formuliere?\n` +
+      `📎 Du kannst auch direkt ein weiteres Dokument hochladen.`
     );
 
     try {
