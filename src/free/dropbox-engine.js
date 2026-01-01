@@ -113,17 +113,13 @@ async function handleFreeUpload(message) {
       ? monthNameDE(dateObj)
       : "Unklar";
 
-  let creditor = cleanPart(
-    analysis.creditor,
-    "Unbekannt"
-  );
-
+  let creditor = cleanPart(analysis.creditor, "Unbekannt");
   if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
     creditor = "Unbekannt";
   }
 
   /* =============================
-     🎯 NEUES ZIELFORMAT
+     🎯 ZIELFORMAT
      📂 /YYYY/Monat
      ============================= */
 
@@ -142,6 +138,7 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
+  // ✅ Speicherbestätigung (EINMAL)
   await message.reply(
     `✅ Dokument gespeichert\n\n` +
     `📂 Ablage: ${folderPath}\n` +
@@ -150,15 +147,14 @@ async function handleFreeUpload(message) {
   );
 
   /* =============================
-     🧩 MODUL-FEEDBACK (nicht blockierend)
+     🧩 MODUL-FEEDBACK (ADD-ON)
      ============================= */
 
   if (moduleResult && moduleResult.message) {
     const m = await message.reply(
       `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +
       moduleResult.message +
-      `\n\n✍️ Möchtest du, dass ich eine Antwort für dich formuliere?\n` +
-      `📎 Du kannst auch direkt ein weiteres Dokument hochladen.`
+      `\n\n✍️ Möchtest du, dass ich eine Antwort für dich formuliere?`
     );
 
     try {
