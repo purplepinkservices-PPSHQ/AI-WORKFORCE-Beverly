@@ -10,6 +10,7 @@ const axios = require("axios");
 const { runOCR } = require("../utils/ocr");
 const { uploadToDropbox } = require("../utils/dropbox");
 const { analyzeDocument } = require("../orchestrator/analysis-orchestrator");
+const { setState } = require("../system/state");
 
 /* =========================================================
    Datum normalisieren (YYYY-MM-DD)
@@ -65,6 +66,7 @@ async function handleFreeUpload(message) {
   const attachment = [...message.attachments.values()][0];
   if (!attachment) return;
 
+  const userId = message.author.id;
   const originalName = attachment.name || "upload";
   const tempDir = path.join(__dirname, "../../tmp");
 
@@ -95,6 +97,14 @@ async function handleFreeUpload(message) {
   const result = await analyzeDocument({ ocrResult });
   const analysis = result.analysis || result;
   const moduleResult = result.module || null;
+
+  // ✅ WICHTIG: Legal-Context persistent speichern
+  if (moduleResult && result.analysis) {
+    setState(userId, {
+      lastLegalAnalysis: result.analysis,
+      lastLegalModule: moduleResult
+    });
+  }
 
   /* =============================
      🧠 STABILE FALLBACKS
@@ -138,7 +148,6 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
-  // ✅ Speicherbestätigung (EINMAL)
   await message.reply(
     `✅ Dokument gespeichert\n\n` +
     `📂 Ablage: ${folderPath}\n` +
@@ -147,7 +156,7 @@ async function handleFreeUpload(message) {
   );
 
   /* =============================
-     🧩 MODUL-FEEDBACK (ADD-ON)
+     🧩 MODUL-FEEDBACK
      ============================= */
 
   if (moduleResult && moduleResult.message) {

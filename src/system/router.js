@@ -38,7 +38,7 @@ async function routeDM(message) {
       return;
     }
 
-    // 3️⃣ ✍️ Emoji → Antwort-Menü (LEGAL-LAWYER)
+    // 3️⃣ ✍️ Emoji als Text (Fallback)
     if (content === "✍️") {
       const menu = legalLawyer.replyMenu?.();
       if (menu) {
@@ -47,9 +47,11 @@ async function routeDM(message) {
       }
     }
 
-    // 4️⃣ Auswahl 1–5 → legal-lawyer
-    if (/^[1-5]$/.test(content)) {
-      const res = legalLawyer.handleReplyRequest(content);
+    // 4️⃣ Auswahl 1–6 → legal-lawyer
+    if (/^[1-6]$/.test(content)) {
+      const lastAnalysis = state.lastLegalAnalysis || {};
+      const res = legalLawyer.handleReplyRequest(content, lastAnalysis);
+
       if (res && res.message) {
         await message.reply(res.message);
         return;
