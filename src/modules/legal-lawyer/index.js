@@ -5,7 +5,7 @@ const { analyze } = require("./analyze");
 const { feedback } = require("./feedback");
 
 /* =========================================================
-   🧩 Antwort-Menü nach ✍️ Reaction
+   🧩 Antwort-Menü
    ========================================================= */
 function replyMenu() {
   return (
@@ -21,19 +21,51 @@ function replyMenu() {
 }
 
 /* =========================================================
-   ✍️ Antwort-Text-Skeletons (Copy-Paste, Chat only)
+   🧠 Einwände aufbereiten (kritisch / Hinweis)
+   ========================================================= */
+function renderObjections(objections = []) {
+  if (!Array.isArray(objections) || objections.length === 0) return "";
+
+  const critical = objections.filter(o => o.level === "kritisch");
+  const hints = objections.filter(o => o.level === "hinweis");
+
+  let text = "";
+
+  if (critical.length) {
+    text +=
+      "⚠️ **Kritische Einwände:**\n" +
+      critical.map(o => `– ${o.text}`).join("\n") +
+      "\n\n";
+  }
+
+  if (hints.length) {
+    text +=
+      "ℹ️ **Hinweise:**\n" +
+      hints.map(o => `– ${o.text}`).join("\n") +
+      "\n\n";
+  }
+
+  return text;
+}
+
+/* =========================================================
+   ✍️ Antwort-Text-Skeletons (ALLE TYPEN)
    ========================================================= */
 function generateReply(action, context = {}) {
-  const deadlineText = context.deadline?.date
-    ? `Die gesetzte Frist endet am ${context.deadline.date.toLocaleDateString("de-DE")}.\n\n`
-    : "";
+  const objectionsText = renderObjections(context.objections);
 
-  const amountText = context.amounts?.found
-    ? `Der geforderte Betrag beläuft sich auf ${context.amounts.total.toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })} EUR.\n\n`
-    : "";
+  const deadlineText =
+    context.deadline?.date
+      ? `Die gesetzte Frist endet am ${context.deadline.date.toLocaleDateString("de-DE")}.\n\n`
+      : "";
+
+  const amountText =
+    context.amounts?.found
+      ? `Der geforderte Betrag beläuft sich auf ${context.amounts.total.toLocaleString("de-DE", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })} EUR.\n\n`
+      : "";
 
   switch (action) {
     case "fristverlaengerung":
@@ -41,9 +73,10 @@ function generateReply(action, context = {}) {
         "Sehr geehrte Damen und Herren,\n\n" +
         deadlineText +
         "hiermit bitte ich um eine angemessene Verlängerung der gesetzten Frist.\n\n" +
+        objectionsText +
         "Aufgrund meiner aktuellen Situation ist es mir derzeit nicht möglich, " +
-        "die Angelegenheit innerhalb der vorgegebenen Frist vollständig zu klären.\n\n" +
-        "Ich bitte um eine kurze schriftliche Bestätigung.\n\n" +
+        "die Angelegenheit innerhalb der Frist abschließend zu klären.\n\n" +
+        "Ich bitte um schriftliche Bestätigung.\n\n" +
         "Mit freundlichen Grüßen\n"
       );
 
@@ -51,10 +84,11 @@ function generateReply(action, context = {}) {
       return (
         "Sehr geehrte Damen und Herren,\n\n" +
         amountText +
-        "hiermit bitte ich um Prüfung einer Ratenzahlung.\n\n" +
-        "Der genannte Betrag kann aktuell nicht in einer Summe beglichen werden. " +
-        "Ich bin jedoch bereit, eine einvernehmliche Lösung zu finden.\n\n" +
-        "Bitte teilen Sie mir das weitere Vorgehen mit.\n\n" +
+        "hiermit beantrage ich die Prüfung einer Ratenzahlung.\n\n" +
+        objectionsText +
+        "Der Gesamtbetrag kann aktuell nicht in einer Summe beglichen werden. " +
+        "Ich bin jedoch bereit, meiner Verpflichtung im Rahmen einer tragfähigen Lösung nachzukommen.\n\n" +
+        "Bitte teilen Sie mir die möglichen Konditionen schriftlich mit.\n\n" +
         "Mit freundlichen Grüßen\n"
       );
 
@@ -62,16 +96,17 @@ function generateReply(action, context = {}) {
       return (
         "Sehr geehrte Damen und Herren,\n\n" +
         "hiermit lege ich fristgerecht Widerspruch gegen Ihr Schreiben ein.\n\n" +
-        "Nach meiner Auffassung bestehen Unklarheiten, die einer erneuten Prüfung bedürfen.\n\n" +
-        "Ich bitte um schriftliche Bestätigung.\n\n" +
+        objectionsText +
+        "Ich bitte um erneute rechtliche und sachliche Prüfung sowie um schriftliche Bestätigung.\n\n" +
         "Mit freundlichen Grüßen\n"
       );
 
     case "kuendigung":
       return (
         "Sehr geehrte Damen und Herren,\n\n" +
-        "hiermit kündige ich das bestehende Vertragsverhältnis fristgerecht.\n\n" +
-        "Bitte bestätigen Sie mir den Beendigungszeitpunkt schriftlich.\n\n" +
+        "hiermit kündige ich das bestehende Vertrags- bzw. Rechtsverhältnis fristgerecht.\n\n" +
+        objectionsText +
+        "Bitte bestätigen Sie mir den Beendigungszeitpunkt sowie den Ausgleich etwaiger Restverpflichtungen schriftlich.\n\n" +
         "Mit freundlichen Grüßen\n"
       );
 
@@ -79,9 +114,9 @@ function generateReply(action, context = {}) {
       return (
         "Sehr geehrte Damen und Herren,\n\n" +
         amountText +
-        "ich bitte um erneute Prüfung des genannten Vorgangs.\n\n" +
-        "Nach Durchsicht Ihres Schreibens ergeben sich aus meiner Sicht offene Fragen.\n\n" +
-        "Bitte teilen Sie mir das Ergebnis schriftlich mit.\n\n" +
+        "ich bitte um erneute sachliche und rechtliche Prüfung des genannten Vorgangs.\n\n" +
+        objectionsText +
+        "Bitte teilen Sie mir das Ergebnis Ihrer Prüfung schriftlich mit.\n\n" +
         "Mit freundlichen Grüßen\n"
       );
 
@@ -91,7 +126,7 @@ function generateReply(action, context = {}) {
 }
 
 /* =========================================================
-   🧠 Auswahl 1–5 verarbeiten (kein Dead-End)
+   🧠 Auswahl 1–5 verarbeiten (KEIN Dead-End)
    ========================================================= */
 function handleReplyRequest(input = "", lastAnalysis = {}) {
   const choice = String(input).trim();

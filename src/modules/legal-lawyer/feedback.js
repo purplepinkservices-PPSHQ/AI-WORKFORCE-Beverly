@@ -8,6 +8,7 @@ function feedback(result) {
     "🧠 **Kurz erklärt:**\n" +
     "Dieses Schreiben fordert dich zu einer Handlung auf.\n\n";
 
+  // ⏰ Frist
   if (result.deadline?.found) {
     if (result.deadline.date) {
       text +=
@@ -26,10 +27,33 @@ function feedback(result) {
     }
   }
 
+  // 💰 Betrag
   if (result.amounts?.found) {
     text +=
       "💰 **Geforderter Betrag:**\n" +
       `${formatMoney(result.amounts.total)} EUR\n\n`;
+  }
+
+  // ⚠️ Einwände (priorisiert)
+  if (result.objections?.length) {
+    const critical = result.objections.filter(o => o.level === "kritisch");
+    const hints = result.objections.filter(o => o.level === "hinweis");
+
+    if (critical.length) {
+      text += "🚨 **Kritische Einwände:**\n";
+      critical.forEach(o => {
+        text += `– ${o.text}\n`;
+      });
+      text += "\n";
+    }
+
+    if (hints.length) {
+      text += "ℹ️ **Hinweise:**\n";
+      hints.forEach(o => {
+        text += `– ${o.text}\n`;
+      });
+      text += "\n";
+    }
   }
 
   text +=
