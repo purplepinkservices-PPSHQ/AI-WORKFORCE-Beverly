@@ -118,6 +118,7 @@ async function analyzeDocument({ ocrResult }) {
   const safeDate = dateResult?.date || null;
   const subject = extractSubject(rawText);
 
+  // ✅ Base analysis (nur generische Engines)
   const analysis = {
     type: safeType,
     category: safeCategory,
@@ -134,7 +135,9 @@ async function analyzeDocument({ ocrResult }) {
   };
 
   /* =========================================================
-     🧩 MODUL-AUSLÖSUNG (ADD-ON, nicht blockierend)
+     🧩 MODUL-AUSLÖSUNG (ADD-ON)
+     WICHTIG: Wir geben die angereicherte Modul-Analyse als "data" zurück,
+     damit Option 6 (und 1–5) echte deadline/amounts/objections sehen.
      ========================================================= */
   let moduleResponse = null;
 
@@ -148,19 +151,21 @@ async function analyzeDocument({ ocrResult }) {
 
     if (shouldRun && typeof legalLawyer.analyze === "function") {
       try {
+        // ✅ modResult ist die "echte" Legal-Analyse (deadline/amounts/objections/type etc.)
         const modResult = legalLawyer.analyze(analysis, rawText);
+
         const msg =
           typeof legalLawyer.feedback === "function"
             ? legalLawyer.feedback(modResult, analysis, rawText)
             : null;
 
-        if (msg) {
-          moduleResponse = {
-            module: legalLawyer.id || "legal-lawyer",
-            message: msg,
-            reactions: ["✍️"]
-          };
-        }
+        moduleResponse = {
+          module: legalLawyer.id || "legal-lawyer",
+          message: msg || null,
+          reactions: ["✍️"],
+          // ✅ DAS ist der Fix: enriched data für State/Option 6
+          data: (modResult && typeof modResult === "object") ? modResult : null
+        };
       } catch {
         moduleResponse = null;
       }

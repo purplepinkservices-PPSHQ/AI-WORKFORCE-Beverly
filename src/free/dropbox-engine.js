@@ -74,10 +74,7 @@ async function handleFreeUpload(message) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  const tempFilePath = path.join(
-    tempDir,
-    `${Date.now()}_${originalName}`
-  );
+  const tempFilePath = path.join(tempDir, `${Date.now()}_${originalName}`);
 
   const response = await axios.get(attachment.url, {
     responseType: "arraybuffer"
@@ -95,23 +92,42 @@ async function handleFreeUpload(message) {
 
   /* Analyse */
   const result = await analyzeDocument({ ocrResult });
-  const analysis = result.analysis || result;
-  const moduleResult = result.module || null;
 
-  // ✅ WICHTIG: Legal-Context persistent speichern
-  if (moduleResult && result.analysis) {
-    setState(userId, {
-      lastLegalAnalysis: result.analysis,
-      lastLegalModule: moduleResult
-    });
-  }
+  const baseAnalysis = result?.analysis || {};
+  const moduleResult = result?.module || null;
+
+  // ✅ WICHTIG:
+  // lastLegalAnalysis MUSS die angereicherte Modul-Analyse enthalten (deadline/amounts/objections)
+  // sonst hat Option 6 "keine Daten".
+  const enrichedLegal =
+    (moduleResult && moduleResult.data && typeof moduleResult.data === "object"
+      ? moduleResult.data
+      : null) || baseAnalysis;
+
+  // ✅ Legal-Context persistent speichern (Option 6 braucht: analysis + rawText)
+  setState(userId, {
+    // Base (für Debug)
+    lastLegalBaseAnalysis: baseAnalysis,
+
+    // Enriched (für Option 1–6)
+    lastLegalAnalysis: enrichedLegal,
+
+    // Modul-Meta (Message/Reactions)
+    lastLegalModule: moduleResult || null,
+
+    // OCR Text für OpenAI Option 6
+    lastLegalRawText: String(ocrResult?.text || "")
+  });
 
   /* =============================
      🧠 STABILE FALLBACKS
      ============================= */
 
-  const safeDate = normalizeDate(analysis.date);
-  const dateObj = analysis.date ? new Date(analysis.date) : null;
+  const safeDate = normalizeDate(enrichedLegal.date || baseAnalysis.date);
+  const dateObj =
+    (enrichedLegal.date || baseAnalysis.date)
+      ? new Date(enrichedLegal.date || baseAnalysis.date)
+      : null;
 
   const year =
     dateObj && !isNaN(dateObj.getTime())
@@ -123,7 +139,7 @@ async function handleFreeUpload(message) {
       ? monthNameDE(dateObj)
       : "Unklar";
 
-  let creditor = cleanPart(analysis.creditor, "Unbekannt");
+  let creditor = cleanPart(enrichedLegal.creditor || baseAnalysis.creditor, "Unbekannt");
   if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
     creditor = "Unbekannt";
   }
@@ -134,8 +150,7 @@ async function handleFreeUpload(message) {
      ============================= */
 
   const folderPath = `/${year}/${month}`;
-  const finalFileName =
-    `${safeDate}-${creditor}` + path.extname(originalName);
+  const finalFileName = `${safeDate}-${creditor}` + path.extname(originalName);
 
   /* Dropbox Upload */
   await uploadToDropbox({
@@ -148,22 +163,23 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
+  // ✅ Speicherbestätigung (EINMAL)
   await message.reply(
     `✅ Dokument gespeichert\n\n` +
-    `📂 Ablage: ${folderPath}\n` +
-    `📄 Name: ${finalFileName}\n\n` +
-    `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
+      `📂 Ablage: ${folderPath}\n` +
+      `📄 Name: ${finalFileName}\n\n` +
+      `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
 
   /* =============================
-     🧩 MODUL-FEEDBACK
+     🧩 MODUL-FEEDBACK (ADD-ON)
      ============================= */
 
   if (moduleResult && moduleResult.message) {
     const m = await message.reply(
       `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +
-      moduleResult.message +
-      `\n\n✍️ Möchtest du, dass ich eine Antwort für dich formuliere?`
+        moduleResult.message +
+        `\n\n✍️ Möchtest du, dass ich eine Antwort für dich formuliere?`
     );
 
     try {

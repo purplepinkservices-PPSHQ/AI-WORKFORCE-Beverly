@@ -7,8 +7,11 @@ const { matches } = require("./match");
 const { analyze } = require("./analyze");
 const { feedback } = require("./feedback");
 
-// ✅ ADD-ON: strukturierter Prüfbericht (Option 6)
+// ✅ ADD-ON: strukturierter Prüfbericht (bestehend)
 const { buildLegalReviewReport } = require("./legal-review-engine");
+
+// ✅ ADD-ON: OpenAI-Vertiefung NUR für Option 6
+const { buildOpenAIReview } = require("./legal-review-openai-engine");
 
 /* =========================================================
    🧩 Antwort-Menü
@@ -25,6 +28,33 @@ function replyMenu() {
     "➡️ Antworte einfach mit **1–6**.\n" +
     "📎 Oder lade direkt das nächste Dokument hoch."
   );
+}
+
+function clampText(s, max) {
+  const t = String(s || "");
+  if (t.length <= max) return t;
+  return t.slice(0, Math.max(0, max - 1)) + "…";
+}
+
+/**
+ * Baut Option-6 Nachricht, aber begrenzt auf 1500 Zeichen TOTAL.
+ * Menü bleibt IMMER enthalten. Report wird gekürzt.
+ */
+function buildOption6Message({ baseReport = "", aiBlock = "" } = {}) {
+  const menu = replyMenu();
+  const header = "🔍 **Schreiben rechtlich prüfen**\n\n";
+  const footer = "\n\n➡️ **Wie möchtest du weiter vorgehen?**\n\n" + menu;
+
+  const maxTotal = 1500;
+
+  // Platz für Report:
+  const fixedLen = header.length + footer.length;
+  const remaining = Math.max(0, maxTotal - fixedLen);
+
+  const reportFull = String(baseReport || "") + String(aiBlock || "");
+  const reportShort = clampText(reportFull.trim(), remaining);
+
+  return header + reportShort + footer;
 }
 
 /* =========================================================
@@ -53,59 +83,6 @@ function renderObjections(objections = []) {
   }
 
   return text;
-}
-
-/* =========================================================
-   🔎 Kurzbewertung (bestehend; bleibt drin)
-   ========================================================= */
-function renderQuickReview(lastAnalysis = {}) {
-  let t = "";
-
-  // Typ / Absender
-  t += `📄 **Typ:** ${lastAnalysis.type || "Unklar"}\n`;
-  t += `🏛️ **Absender:** ${lastAnalysis.creditor || "Unbekannt"}\n\n`;
-
-  // Frist
-  if (lastAnalysis.deadline?.found) {
-    if (lastAnalysis.deadline.date) {
-      t +=
-        "⏰ **Frist:** " +
-        lastAnalysis.deadline.date.toLocaleDateString("de-DE") +
-        (typeof lastAnalysis.deadline.daysLeft === "number"
-          ? ` (noch ${lastAnalysis.deadline.daysLeft} Tage)`
-          : "") +
-        "\n";
-      if (lastAnalysis.deadline.critical) {
-        t += "⚠️ **Frist wirkt zeitkritisch** (bitte sofort handeln).\n";
-      } else {
-        t += "✅ Frist wirkt **nicht** akut-kritisch.\n";
-      }
-      t += "\n";
-    } else if (lastAnalysis.deadline.hint) {
-      t += `⏰ **Frist:** ${lastAnalysis.deadline.hint}\n\n`;
-    }
-  }
-
-  // Betrag
-  if (lastAnalysis.amounts?.found) {
-    const money = lastAnalysis.amounts.total.toLocaleString("de-DE", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-    t += `💰 **Betrag:** ${money} EUR\n`;
-
-    if (
-      Array.isArray(lastAnalysis.amounts.all) &&
-      lastAnalysis.amounts.all.length > 1
-    ) {
-      t += "ℹ️ Hinweis: Mehrere Beträge erkannt – **Aufschlüsselung prüfen**.\n";
-    } else {
-      t += "ℹ️ Hinweis: Betrag genannt – **Begründung/Aufschlüsselung prüfen**.\n";
-    }
-    t += "\n";
-  }
-
-  return t;
 }
 
 /* =========================================================
@@ -191,7 +168,9 @@ function generateReply(action, context = {}) {
 }
 
 /* =========================================================
-   🧠 Auswahl 1–6 verarbeiten
+   🧠 Auswahl 1–6 verarbeiten (bestehend)
+   - 1–5 bleiben synchron und unverändert in der Wirkung
+   - 6 wird über handleReplyRequestAsync im Router gemacht (Add-on)
    ========================================================= */
 function handleReplyRequest(input = "", lastAnalysis = {}) {
   const choice = String(input).trim();
@@ -203,22 +182,6 @@ function handleReplyRequest(input = "", lastAnalysis = {}) {
     "4": { action: "kuendigung", label: "Kündigung" },
     "5": { action: "pruefung", label: "Antwort / Klärung" }
   };
-
-  // 🔍 OPTION 6 = STRUKTURIERTER PRÜFBERICHT + MENÜ ZURÜCK (ADD-ON)
-  if (choice === "6") {
-    // bestehendes QuickReview bleibt optional drin – wir liefern zusätzlich den echten Report
-    const report = buildLegalReviewReport(lastAnalysis);
-
-    return {
-      action: "analyse",
-      label: "Rechtliche Prüfung",
-      message:
-        "🔍 **Schreiben rechtlich prüfen**\n\n" +
-        report +
-        "\n\n➡️ **Wie möchtest du weiter vorgehen?**\n\n" +
-        replyMenu()
-    };
-  }
 
   if (!map[choice]) return null;
 
@@ -238,11 +201,60 @@ function handleReplyRequest(input = "", lastAnalysis = {}) {
   };
 }
 
+/* =========================================================
+   ✅ ADD-ON: Async handler NUR für Option 6
+   - strukturiert + OpenAI-Vertiefung
+   - MESSAGE HARD LIMIT 1500 chars
+   ========================================================= */
+async function handleReplyRequestAsync(
+  input = "",
+  lastAnalysis = {},
+  rawText = "",
+  cache = { hash: "", review: null }
+) {
+  const choice = String(input).trim();
+  if (choice !== "6") return null;
+
+  const baseReport = buildLegalReviewReport(lastAnalysis);
+
+  let aiBlock = "";
+  let aiReview = null;
+  let aiHash = "";
+
+  if (rawText && String(rawText).trim().length > 20) {
+    const ai = await buildOpenAIReview({
+      analysis: lastAnalysis,
+      rawText,
+      cachedHash: cache.hash || "",
+      cachedReview: cache.review || null
+    });
+
+    aiHash = ai.hash || "";
+    aiBlock = "\n\n" + ai.reportText;
+    if (ai.ok) aiReview = ai.review;
+  } else {
+    aiBlock =
+      "\n\n🧾 **OpenAI-Vertiefung (Form/Logik)**\n\n" +
+      "⚠️ Kein OCR-Text gespeichert – übersprungen.\n";
+  }
+
+  const message = buildOption6Message({ baseReport, aiBlock });
+
+  return {
+    action: "analyse",
+    label: "Schreiben rechtlich prüfen",
+    aiHash,
+    aiReview,
+    message
+  };
+}
+
 module.exports = {
   id: "legal-lawyer",
   matches,
   analyze,
   feedback,
   replyMenu,
-  handleReplyRequest
+  handleReplyRequest,
+  handleReplyRequestAsync
 };

@@ -5,13 +5,16 @@
 
 /**
  * Baut einen strukturierten Prüfbericht (Option 6).
- * KEIN Versand, nur Copy/Paste-Output im Chat.
+ * KEIN Versand, nur Output im Chat.
  * Nutzt NUR lastAnalysis (Frist/Betrag/Einwände/Typ).
  */
 
 function formatDate(d) {
   try {
-    return d instanceof Date ? d.toLocaleDateString("de-DE") : String(d);
+    if (d instanceof Date) return d.toLocaleDateString("de-DE");
+    const dd = new Date(d);
+    if (!isNaN(dd.getTime())) return dd.toLocaleDateString("de-DE");
+    return String(d);
   } catch {
     return String(d);
   }
@@ -36,16 +39,16 @@ function splitObjections(objections = []) {
 }
 
 function addDerivedPoints(lastAnalysis = {}, critical = [], hints = []) {
-  // Frist abgelaufen / negativ
   const dl = lastAnalysis.deadline;
+
+  // Frist abgelaufen / sehr kurz
   if (dl?.found && typeof dl.daysLeft === "number") {
     if (dl.daysLeft < 0) {
       critical.push({
         level: "kritisch",
-        text: `Frist scheint bereits abgelaufen (noch ${dl.daysLeft} Tage)`
+        text: `Frist scheint bereits abgelaufen (vor ${Math.abs(dl.daysLeft)} Tagen)`
       });
     } else if (dl.daysLeft <= 7) {
-      // das ist zusätzlich zur objections-Engine ok, aber als "Report"-Hinweis hilfreich
       critical.push({
         level: "kritisch",
         text: "Sehr kurze Frist – sofort reagieren (Frist wahren!)"
@@ -61,7 +64,7 @@ function addDerivedPoints(lastAnalysis = {}, critical = [], hints = []) {
     });
   }
 
-  // Typ-spezifische Hinweise (neutral, keine Rechtsberatung)
+  // Typ-spezifische Hinweise (neutral)
   const type = lastAnalysis.type || "Unklar";
 
   if (type === "Bescheid") {
@@ -116,13 +119,20 @@ function buildSummary(lastAnalysis = {}) {
   const dl = lastAnalysis.deadline;
   if (dl?.found) {
     if (dl.date) {
-      t += `⏰ **Frist:** ${formatDate(dl.date)}`;
+      const dateStr = formatDate(dl.date);
       if (typeof dl.daysLeft === "number") {
-        t += ` (noch ${dl.daysLeft} Tage)`;
+        if (dl.daysLeft < 0) {
+          t += `⏰ **Frist:** ${dateStr} (abgelaufen vor ${Math.abs(dl.daysLeft)} Tagen)\n`;
+        } else {
+          t += `⏰ **Frist:** ${dateStr} (noch ${dl.daysLeft} Tage)\n`;
+        }
+      } else {
+        t += `⏰ **Frist:** ${dateStr}\n`;
       }
-      t += "\n";
     } else if (dl.hint) {
       t += `⏰ **Frist:** ${dl.hint}\n`;
+    } else {
+      t += "⏰ **Frist:** Frist erkannt, aber Datum unklar\n";
     }
   } else {
     t += "⏰ **Frist:** Keine klare Frist erkannt\n";
@@ -152,7 +162,6 @@ function buildListSection(title, items = []) {
 function buildNextSteps(lastAnalysis = {}, criticalCount = 0) {
   const steps = [];
 
-  // Allgemein
   steps.push("Frist wahren: Wenn unklar/kurz, vorsorglich fristwahrend reagieren (z. B. Prüfung + Fristverlängerung anfragen).");
   steps.push("Belege sichern: Schreiben/Anlagen, Zustellnachweis, Aktenzeichen, Betragsaufstellung sammeln.");
   steps.push("Aufschlüsselung anfordern, wenn Betrag/Kosten nicht nachvollziehbar sind.");
@@ -175,7 +184,6 @@ function buildNextSteps(lastAnalysis = {}, criticalCount = 0) {
     steps.push("Pfändung: Bank/P-Konto-Thema prüfen, Pfändungsfreigrenzen/Schutzmöglichkeiten klären, Forderungsdaten abgleichen.");
   }
 
-  // Wenn kritische Punkte da sind, oben betonen
   if (criticalCount > 0) {
     steps.unshift("🚨 Priorität: Erst die kritischen Punkte adressieren, dann Details nachreichen.");
   }
@@ -183,6 +191,19 @@ function buildNextSteps(lastAnalysis = {}, criticalCount = 0) {
   let t = "🧭 **Empfohlene nächste Schritte**\n";
   steps.forEach((s) => (t += `– ${s}\n`));
   return t;
+}
+
+function dedupe(items = []) {
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    const key = String(it?.text || "").trim().toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ level: it.level || "hinweis", text: it.text });
+  }
+  return out;
 }
 
 /**
@@ -212,19 +233,6 @@ function buildLegalReviewReport(lastAnalysis = {}) {
   report += buildNextSteps(lastAnalysis, critical.length);
 
   return report.trim();
-}
-
-function dedupe(items = []) {
-  const seen = new Set();
-  const out = [];
-  for (const it of items) {
-    const key = String(it?.text || "").trim().toLowerCase();
-    if (!key) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ level: it.level || "hinweis", text: it.text });
-  }
-  return out;
 }
 
 module.exports = {

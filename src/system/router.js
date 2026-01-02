@@ -1,9 +1,15 @@
+// ============================================================
+// Datei: src/system/router.js
+// ============================================================
 "use strict";
 
 const { runOnboarding } = require("../free/onboarding-engine");
 const { handleFreeUpload } = require("../free/dropbox-engine");
-const { getState } = require("./state");
+const { getState, setState } = require("./state");
 const legalLawyer = require("../modules/legal-lawyer");
+
+// ✅ ADD-ON: Discord Message Splitter (bereits gebaut)
+const { splitForDiscord } = require("./message-splitter");
 
 // Reactions (bestehend, unverändert)
 let routeReaction = async () => {};
@@ -42,7 +48,10 @@ async function routeDM(message) {
     if (content === "✍️") {
       const menu = legalLawyer.replyMenu?.();
       if (menu) {
-        await message.reply(menu);
+        const parts = splitForDiscord(menu);
+        for (const part of parts) {
+          await message.reply(part);
+        }
         return;
       }
     }
@@ -50,19 +59,59 @@ async function routeDM(message) {
     // 4️⃣ Auswahl 1–6 → legal-lawyer
     if (/^[1-6]$/.test(content)) {
       const lastAnalysis = state.lastLegalAnalysis || {};
-      const res = legalLawyer.handleReplyRequest(content, lastAnalysis);
 
+      // ✅ OPTION 6: Async (OpenAI-Vertiefung) – Add-on
+      if (content === "6" && typeof legalLawyer.handleReplyRequestAsync === "function") {
+        const rawText = state.lastLegalRawText || "";
+
+        const cache = {
+          hash: state.lastLegalAIHash || "",
+          review: state.lastLegalAIReview || null
+        };
+
+        const res = await legalLawyer.handleReplyRequestAsync(
+          content,
+          lastAnalysis,
+          rawText,
+          cache
+        );
+
+        if (res && res.message) {
+          // Cache speichern (nur wenn vorhanden)
+          if (res.aiHash && res.aiReview) {
+            setState(userId, {
+              lastLegalAIHash: res.aiHash,
+              lastLegalAIReview: res.aiReview
+            });
+          }
+
+          const parts = splitForDiscord(res.message);
+          for (const part of parts) {
+            await message.reply(part);
+          }
+          return;
+        }
+      }
+
+      // 1–5 bleiben wie gehabt (sync)
+      const res = legalLawyer.handleReplyRequest(content, lastAnalysis);
       if (res && res.message) {
-        await message.reply(res.message);
+        const parts = splitForDiscord(res.message);
+        for (const part of parts) {
+          await message.reply(part);
+        }
         return;
       }
     }
 
     // 5️⃣ Fallback
     if (content) {
-      await message.reply(
-        "👍 Alles klar.\n📄 Du kannst mir jederzeit ein weiteres Dokument schicken – ich bin bereit 😊"
-      );
+      const fallback =
+        "👍 Alles klar.\n📄 Du kannst mir jederzeit ein weiteres Dokument schicken – ich bin bereit 😊";
+      const parts = splitForDiscord(fallback);
+      for (const part of parts) {
+        await message.reply(part);
+      }
     }
   } catch (err) {
     console.error("❌ ROUTER ERROR:", err);
