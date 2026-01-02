@@ -1,8 +1,14 @@
+// ============================================================
+// Datei: src/modules/legal-lawyer/index.js
+// ============================================================
 "use strict";
 
 const { matches } = require("./match");
 const { analyze } = require("./analyze");
 const { feedback } = require("./feedback");
+
+// ✅ ADD-ON: strukturierter Prüfbericht (Option 6)
+const { buildLegalReviewReport } = require("./legal-review-engine");
 
 /* =========================================================
    🧩 Antwort-Menü
@@ -50,7 +56,7 @@ function renderObjections(objections = []) {
 }
 
 /* =========================================================
-   🔎 Kurzbewertung (nur ADD-ON für Option 6)
+   🔎 Kurzbewertung (bestehend; bleibt drin)
    ========================================================= */
 function renderQuickReview(lastAnalysis = {}) {
   let t = "";
@@ -88,13 +94,11 @@ function renderQuickReview(lastAnalysis = {}) {
     });
     t += `💰 **Betrag:** ${money} EUR\n`;
 
-    // einfache Plausibilitäts-Hinweise (neutral)
     if (
       Array.isArray(lastAnalysis.amounts.all) &&
       lastAnalysis.amounts.all.length > 1
     ) {
-      t +=
-        "ℹ️ Hinweis: Mehrere Beträge erkannt – **Aufschlüsselung prüfen**.\n";
+      t += "ℹ️ Hinweis: Mehrere Beträge erkannt – **Aufschlüsselung prüfen**.\n";
     } else {
       t += "ℹ️ Hinweis: Betrag genannt – **Begründung/Aufschlüsselung prüfen**.\n";
     }
@@ -200,19 +204,18 @@ function handleReplyRequest(input = "", lastAnalysis = {}) {
     "5": { action: "pruefung", label: "Antwort / Klärung" }
   };
 
-  // 🔍 OPTION 6 = NUR PRÜFUNG + MENÜ ZURÜCK (ERGÄNZT, sonst nix geändert)
+  // 🔍 OPTION 6 = STRUKTURIERTER PRÜFBERICHT + MENÜ ZURÜCK (ADD-ON)
   if (choice === "6") {
-    const quick = renderQuickReview(lastAnalysis);
-    const objectionText = renderObjections(lastAnalysis.objections);
+    // bestehendes QuickReview bleibt optional drin – wir liefern zusätzlich den echten Report
+    const report = buildLegalReviewReport(lastAnalysis);
 
     return {
       action: "analyse",
       label: "Rechtliche Prüfung",
       message:
-        "🔍 **Rechtliche Prüfung des Schreibens**\n\n" +
-        quick +
-        objectionText +
-        "➡️ **Wie möchtest du weiter vorgehen?**\n\n" +
+        "🔍 **Schreiben rechtlich prüfen**\n\n" +
+        report +
+        "\n\n➡️ **Wie möchtest du weiter vorgehen?**\n\n" +
         replyMenu()
     };
   }
