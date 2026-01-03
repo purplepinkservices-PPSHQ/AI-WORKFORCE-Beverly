@@ -3,6 +3,7 @@
 // Zweck: OpenAI-Vertiefung NUR für Option 6
 // Scope: Formfehler + Argumentationsstärke + Bedeutung/Risiken/Handlungsspielraum
 // ============================================================
+
 "use strict";
 
 const crypto = require("crypto");
@@ -34,10 +35,174 @@ function short(text, max = 260) {
 
 function toBulletList(arr, maxItems = 6) {
   if (!Array.isArray(arr) || arr.length === 0) return "– (keine)\n";
-  return arr
-    .slice(0, maxItems)
-    .map((x) => `– ${String(x)}`)
-    .join("\n") + "\n";
+  return (
+    arr
+      .slice(0, maxItems)
+      .map((x) => `– ${String(x)}`)
+      .join("\n") + "\n"
+  );
+}
+
+/* =========================================================
+   DETERMINISTIC FACTS (priorisiert, bindend)
+   Wir ändern keine bestehende Logik – wir lesen nur mehr aus "analysis",
+   falls das modul-angereicherte Objekt dort steckt.
+   ========================================================= */
+function isObject(x) {
+  return !!x && typeof x === "object" && !Array.isArray(x);
+}
+
+// Nur whitelisted Facts – damit kein Müll im Prompt landet
+function collectDeterministicFacts(analysis = {}) {
+  const a = isObject(analysis) ? analysis : {};
+
+  // base (immer erlaubt)
+  const out = {
+    type: a.type || null,
+    category: a.category || null,
+    creditor: a.creditor || null,
+    subject: a.subject || null,
+    date_engine: a.date || null,
+    person: a.person || null,
+    source: a.source || null
+  };
+
+  // legal-lawyer enriched (optional)
+  // Wir versuchen mehrere typische Keys – ohne Annahmen zu erfinden.
+  const candidateKeys = [
+    "deadline",
+    "deadlines",
+    "amount",
+    "amounts",
+    "total",
+    "totalAmount",
+    "total_amount",
+    "reference",
+    "file_reference",
+    "aktenzeichen",
+    "caseNumber",
+    "case_number",
+    "objections",
+    "risks",
+    "next_steps",
+    "recommended_steps",
+    "document_date",
+    "sender",
+    "authority",
+    "authorityHit",
+    "court",
+    "court_name"
+  ];
+
+  for (const k of candidateKeys) {
+    if (typeof a[k] !== "undefined") out[k] = a[k];
+  }
+
+  // Wenn objections wie im Legal-Modul drin sind: in clean Form
+  if (Array.isArray(a.objections)) {
+    out.objections = a.objections
+      .filter((o) => o && typeof o === "object")
+      .map((o) => ({
+        level: o.level || null,
+        text: o.text || null
+      }))
+      .filter((o) => o.text);
+  }
+
+  // Entferne null/undefined Felder
+  const cleaned = {};
+  for (const [k, v] of Object.entries(out)) {
+    if (typeof v === "undefined" || v === null) continue;
+    cleaned[k] = v;
+  }
+
+  return cleaned;
+}
+
+function hasMeaningfulDeterministicFacts(d) {
+  if (!isObject(d)) return false;
+  const keys = Object.keys(d);
+  // Nur base-Facts zählen nicht als "mehrwertig"
+  const base = new Set([
+    "type",
+    "category",
+    "creditor",
+    "subject",
+    "date_engine",
+    "person",
+    "source"
+  ]);
+  return keys.some((k) => !base.has(k));
+}
+
+function normalizeStr(s) {
+  return String(s || "").toLowerCase().trim();
+}
+
+function containsAny(text, arr) {
+  const t = normalizeStr(text);
+  return arr.some((k) => t.includes(k));
+}
+
+// Post-Filter: Wenn deterministische Facts vorhanden sind,
+// darf OpenAI diese NICHT als "unklar" melden.
+function filterMissingAgainstDeterministic(missingArr, detFacts) {
+  if (!Array.isArray(missingArr)) return [];
+  const det = isObject(detFacts) ? detFacts : {};
+
+  const hasAmount =
+    typeof det.amount !== "undefined" ||
+    typeof det.total !== "undefined" ||
+    typeof det.totalAmount !== "undefined" ||
+    typeof det.total_amount !== "undefined" ||
+    (Array.isArray(det.amounts) && det.amounts.length > 0);
+
+  const hasDeadline =
+    typeof det.deadline !== "undefined" ||
+    (Array.isArray(det.deadlines) && det.deadlines.length > 0);
+
+  const hasRef =
+    typeof det.aktenzeichen !== "undefined" ||
+    typeof det.caseNumber !== "undefined" ||
+    typeof det.case_number !== "undefined" ||
+    typeof det.file_reference !== "undefined" ||
+    typeof det.reference !== "undefined";
+
+  const filtered = [];
+
+  for (const item of missingArr) {
+    const s = String(item || "").trim();
+    if (!s) continue;
+
+    // Betrag/Summe bereits deterministisch bekannt
+    if (
+      hasAmount &&
+      containsAny(s, ["betrag", "summe", "gesamt", "eur", "€", "zahlung"])
+    ) {
+      continue;
+    }
+
+    // Frist/Deadline bereits deterministisch bekannt
+    if (
+      hasDeadline &&
+      containsAny(s, ["frist", "deadline", "fällig", "faellig", "datum"])
+    ) {
+      continue;
+    }
+
+    // Aktenzeichen/Referenz bereits deterministisch bekannt
+    if (
+      hasRef &&
+      containsAny(s, ["aktenzeichen", "az", "referenz", "zeichen", "vorgang"])
+    ) {
+      continue;
+    }
+
+    filtered.push(s);
+  }
+
+  // unique
+  return Array.from(new Set(filtered));
 }
 
 /* =========================================================
@@ -119,6 +284,7 @@ function renderAIReviewReport(ai = {}) {
 
 /* =========================================================
    PROMPT BUILDER (Facts sind bindend)
+   - Neu: deterministischeFacts werden priorisiert injiziert
    ========================================================= */
 function buildPrompt({ analysis = {}, rawText = "" }) {
   const type = analysis.type || "Unklar";
@@ -136,7 +302,12 @@ function buildPrompt({ analysis = {}, rawText = "" }) {
     .filter((o) => o && o.level === "hinweis")
     .map((o) => o.text);
 
+  // OCR-basierte Facts (sekundär)
   const { facts, missing } = extractFacts(rawText);
+
+  // Deterministische Facts (priorisiert, bindend)
+  const deterministicFacts = collectDeterministicFacts(analysis);
+  const hasDetFacts = hasMeaningfulDeterministicFacts(deterministicFacts);
 
   const header =
     `Dokumenttyp: ${type}\n` +
@@ -151,13 +322,28 @@ function buildPrompt({ analysis = {}, rawText = "" }) {
     "Hinweise:\n" +
     toBulletList(hints, 6);
 
+  // Facts Block: deterministisch > ocrFacts
+  const factPayload = {
+    deterministic: hasDetFacts ? deterministicFacts : {},
+    ocr_facts: facts || {},
+    ocr_missing: Array.isArray(missing) ? missing : []
+  };
+
   const factBlock =
-    "Harte Fakten (deterministisch extrahiert; NICHT widersprechen):\n" +
-    JSON.stringify({ facts, missing }, null, 2);
+    "Harte Fakten (Priorität: deterministisch > OCR; NICHT widersprechen):\n" +
+    JSON.stringify(factPayload, null, 2);
 
   const doc = safeTrim(rawText, 18000);
 
-  return { header, knownIssues, factBlock, doc, facts, missing };
+  return {
+    header,
+    knownIssues,
+    factBlock,
+    doc,
+    facts,
+    missing,
+    deterministicFacts: hasDetFacts ? deterministicFacts : {}
+  };
 }
 
 /* =========================================================
@@ -176,7 +362,14 @@ async function runOpenAILegalReview({ analysis = {}, rawText = "" } = {}) {
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const { header, knownIssues, factBlock, doc, facts, missing } = buildPrompt({
+  const {
+    header,
+    knownIssues,
+    factBlock,
+    doc,
+    missing,
+    deterministicFacts
+  } = buildPrompt({
     analysis,
     rawText
   });
@@ -232,11 +425,14 @@ async function runOpenAILegalReview({ analysis = {}, rawText = "" } = {}) {
     "Du bist ein extrem vorsichtiger Prüfer für Schreiben in Deutschland. " +
     "Du gibst KEINE Rechtsberatung. " +
     "Du bewertest NUR: Formalien, Plausibilität, Logik, Argumentationsstärke, Bedeutung, Risiken und sichere Handlungsspielräume. " +
-    "WICHTIG:\n" +
-    "1) NICHTS erfinden (keine Paragrafen, keine Fakten).\n" +
-    "2) Die 'Harten Fakten' sind bindend. Du DARFST ihnen NICHT widersprechen.\n" +
-    "3) Wenn etwas fehlt: als 'unklar' markieren.\n" +
-    "4) Erkläre WARUM etwas relevant ist und WAS man sicher tun kann.";
+    "WICHTIG (hart):\n" +
+    "1) NICHTS erfinden (keine Paragrafen, keine neuen Fakten).\n" +
+    "2) 'Harte Fakten' sind bindend. Du DARFST ihnen NICHT widersprechen.\n" +
+    "3) Priorität: deterministische Fakten > OCR-Fakten. Wenn OCR abweicht, behandle das als OCR-Fehler.\n" +
+    "4) Wenn etwas fehlt: als 'unklar' markieren.\n" +
+    "5) missing_or_unclear darf KEINE Punkte enthalten, die in deterministischen Fakten vorhanden sind.\n" +
+    "6) Summary/Analyse soll erkennbare deterministische Eckdaten NICHT als unklar darstellen (z.B. Betrag/Frist/Aktenzeichen, falls vorhanden).\n" +
+    "7) Erkläre WARUM etwas relevant ist und WAS man sicher tun kann.";
 
   const user =
     "Prüfe dieses Schreiben (Scope: Form/Logik/Argumentation) und gib NUR JSON im Schema zurück.\n\n" +
@@ -277,6 +473,12 @@ async function runOpenAILegalReview({ analysis = {}, rawText = "" } = {}) {
     if (!parsed.missing_or_unclear.includes(m))
       parsed.missing_or_unclear.push(m);
   }
+
+  // ✅ Neu: Missing-Liste gegen deterministische Facts filtern
+  parsed.missing_or_unclear = filterMissingAgainstDeterministic(
+    parsed.missing_or_unclear,
+    deterministicFacts
+  );
 
   return { ok: true, data: parsed };
 }
