@@ -1,5 +1,6 @@
 // ============================================================
 // Datei: src/free/dropbox-engine.js
+// ✅ FIX: Nie wieder /ohne/Unklar + robustere Date/Creditor-Fallbacks
 // ============================================================
 "use strict";
 
@@ -13,13 +14,31 @@ const { analyzeDocument } = require("../orchestrator/analysis-orchestrator");
 const { setState } = require("../system/state");
 
 /* =========================================================
-   Datum normalisieren (YYYY-MM-DD)
+   Helpers
    ========================================================= */
+function monthNameDE(dateObj) {
+  const map = {
+    0: "Januar",
+    1: "Februar",
+    2: "Maerz",
+    3: "April",
+    4: "Mai",
+    5: "Juni",
+    6: "Juli",
+    7: "August",
+    8: "September",
+    9: "Oktober",
+    10: "November",
+    11: "Dezember"
+  };
+  return map[dateObj.getMonth()] || "Unklar";
+}
+
 function normalizeDate(input) {
-  if (!input) return "ohne-Datum";
+  if (!input) return null;
 
   const d = new Date(input);
-  if (isNaN(d.getTime())) return "ohne-Datum";
+  if (isNaN(d.getTime())) return null;
 
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -28,40 +47,89 @@ function normalizeDate(input) {
   return `${y}-${m}-${day}`;
 }
 
-/* =========================================================
-   Dateiname säubern
-   ========================================================= */
 function cleanPart(value, fallback) {
   if (!value) return fallback;
 
-  return value
-    .toString()
+  return String(value)
     .trim()
     .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9äöüÄÖÜß\-]/g, "");
+    .replace(/[^a-zA-Z0-9äöüÄÖÜß\-]/g, "")
+    .replace(/\-+/g, "-")
+    .replace(/^\-+|\-+$/g, "") || fallback;
+}
+
+function extractFirstGermanDate(rawText = "") {
+  const t = String(rawText || "");
+  const m = t.match(/\b(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})\b/);
+  if (!m) return null;
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+function detectCreditorFromHeader(rawText = "") {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const header = lines.slice(0, 25);
+
+  const KEY = [
+    "amtsgericht",
+    "landgericht",
+    "oberlandesgericht",
+    "staatsanwaltschaft",
+    "finanzamt",
+    "hauptzollamt",
+    "jobcenter",
+    "arbeitsagentur",
+    "landesjustizkasse",
+    "polizei",
+    "ordnungsamt",
+    "stadt",
+    "gemeinde",
+    "gerichtsvollzieher",
+    "zoll"
+  ];
+
+  // 1) harte Trefferzeile
+  for (const line of header) {
+    const low = line.toLowerCase();
+    if (KEY.some((k) => low.includes(k))) return line;
+  }
+
+  // 2) fallback: erste "offizielle" Kopfzeile (nicht zu kurz)
+  for (const line of header) {
+    if (line.length >= 12 && !/^(seite|page)\s*\d+/i.test(line)) return line;
+  }
+
+  return null;
+}
+
+function buildSafeFolderAndName({ dateObj, creditor, originalName }) {
+  const hasDate = dateObj && !isNaN(dateObj.getTime());
+
+  const year = hasDate ? String(dateObj.getFullYear()) : "Unklar";
+  const month = hasDate ? monthNameDE(dateObj) : "Unklar";
+
+  const safeDate = hasDate
+    ? `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(
+        dateObj.getDate()
+      ).padStart(2, "0")}`
+    : "ohne-Datum";
+
+  const safeCreditor = cleanPart(creditor, "Unbekannt");
+
+  const folderPath = `/${year}/${month}`;
+  const finalFileName = `${safeDate}-${safeCreditor}${path.extname(originalName || "") || ""}`;
+
+  return { folderPath, finalFileName };
 }
 
 /* =========================================================
-   Monatsname DE
+   MAIN
    ========================================================= */
-function monthNameDE(dateObj) {
-  const map = {
-    1: "Januar",
-    2: "Februar",
-    3: "Maerz",
-    4: "April",
-    5: "Mai",
-    6: "Juni",
-    7: "Juli",
-    8: "August",
-    9: "September",
-    10: "Oktober",
-    11: "November",
-    12: "Dezember"
-  };
-  return map[dateObj.getMonth() + 1] || "Unklar";
-}
-
 async function handleFreeUpload(message) {
   const attachment = [...message.attachments.values()][0];
   if (!attachment) return;
@@ -70,89 +138,68 @@ async function handleFreeUpload(message) {
   const originalName = attachment.name || "upload";
   const tempDir = path.join(__dirname, "../../tmp");
 
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
+  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
   const tempFilePath = path.join(tempDir, `${Date.now()}_${originalName}`);
 
-  const response = await axios.get(attachment.url, {
-    responseType: "arraybuffer"
-  });
-
+  const response = await axios.get(attachment.url, { responseType: "arraybuffer" });
   const buffer = Buffer.from(response.data);
   fs.writeFileSync(tempFilePath, buffer);
 
-  /* OCR */
+  // OCR
   const ocrResult = await runOCR({
     buffer,
     filePath: tempFilePath,
     mimeType: attachment.contentType || ""
   });
 
-  /* Analyse */
+  // Analyse
   const result = await analyzeDocument({ ocrResult });
 
   const baseAnalysis = result?.analysis || {};
   const moduleResult = result?.module || null;
 
-  // ✅ WICHTIG:
-  // lastLegalAnalysis MUSS die angereicherte Modul-Analyse enthalten (deadline/amounts/objections)
-  // sonst hat Option 6 "keine Daten".
+  // ✅ ENRICH (wie vorher)
   const enrichedLegal =
-    (moduleResult && moduleResult.data && typeof moduleResult.data === "object"
-      ? moduleResult.data
-      : null) || baseAnalysis;
+    moduleResult && moduleResult.data && typeof moduleResult.data === "object"
+      ? { ...baseAnalysis, ...moduleResult.data }
+      : baseAnalysis;
 
-  // ✅ Legal-Context persistent speichern (Option 6 braucht: analysis + rawText)
+  // ✅ State (wie vorher)
   setState(userId, {
-    // Base (für Debug)
     lastLegalBaseAnalysis: baseAnalysis,
-
-    // Enriched (für Option 1–6)
     lastLegalAnalysis: enrichedLegal,
-
-    // Modul-Meta (Message/Reactions)
     lastLegalModule: moduleResult || null,
-
-    // OCR Text für OpenAI Option 6
     lastLegalRawText: String(ocrResult?.text || "")
   });
 
-  /* =============================
-     🧠 STABILE FALLBACKS
-     ============================= */
+  // ✅ DATE FALLBACKS (wichtig!)
+  const rawText = String(ocrResult?.text || "");
+  const bestDateObj =
+    (enrichedLegal.date ? new Date(enrichedLegal.date) : null) ||
+    (baseAnalysis.date ? new Date(baseAnalysis.date) : null);
 
-  const safeDate = normalizeDate(enrichedLegal.date || baseAnalysis.date);
-  const dateObj =
-    (enrichedLegal.date || baseAnalysis.date)
-      ? new Date(enrichedLegal.date || baseAnalysis.date)
-      : null;
+  let dateObj = bestDateObj;
+  if (!dateObj || isNaN(dateObj.getTime())) dateObj = extractFirstGermanDate(rawText);
 
-  const year =
-    dateObj && !isNaN(dateObj.getTime())
-      ? String(dateObj.getFullYear())
-      : safeDate.substring(0, 4);
+  // ✅ CREDITOR FALLBACKS (wichtig!)
+  let creditor =
+    enrichedLegal.creditor ||
+    baseAnalysis.creditor ||
+    detectCreditorFromHeader(rawText) ||
+    "Unbekannt";
 
-  const month =
-    dateObj && !isNaN(dateObj.getTime())
-      ? monthNameDE(dateObj)
-      : "Unklar";
+  // UUID-Müll abfangen
+  const cleanedCreditor = cleanPart(creditor, "Unbekannt");
+  if (/^[0-9A-F\-]{8,}$/i.test(cleanedCreditor)) creditor = "Unbekannt";
 
-  let creditor = cleanPart(enrichedLegal.creditor || baseAnalysis.creditor, "Unbekannt");
-  if (/^[0-9A-F\-]{8,}$/i.test(creditor)) {
-    creditor = "Unbekannt";
-  }
+  const { folderPath, finalFileName } = buildSafeFolderAndName({
+    dateObj,
+    creditor,
+    originalName
+  });
 
-  /* =============================
-     🎯 ZIELFORMAT
-     📂 /YYYY/Monat
-     ============================= */
-
-  const folderPath = `/${year}/${month}`;
-  const finalFileName = `${safeDate}-${creditor}` + path.extname(originalName);
-
-  /* Dropbox Upload */
+  // Dropbox Upload
   await uploadToDropbox({
     buffer,
     fileName: finalFileName,
@@ -163,7 +210,7 @@ async function handleFreeUpload(message) {
     fs.unlinkSync(tempFilePath);
   } catch {}
 
-  // ✅ Speicherbestätigung (EINMAL)
+  // Speicherbestätigung
   await message.reply(
     `✅ Dokument gespeichert\n\n` +
       `📂 Ablage: ${folderPath}\n` +
@@ -171,10 +218,7 @@ async function handleFreeUpload(message) {
       `⬇️ Du kannst direkt das nächste Dokument hochladen 😊`
   );
 
-  /* =============================
-     🧩 MODUL-FEEDBACK (ADD-ON)
-     ============================= */
-
+  // Legal Feedback + ✍️ Reaction (wie vorher)
   if (moduleResult && moduleResult.message) {
     const m = await message.reply(
       `⚖️ **Einschätzung zu deinem Schreiben**\n\n` +

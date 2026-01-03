@@ -1,5 +1,6 @@
 // ============================================================
 // Datei: src/system/router.js
+// ✅ ROUTER (ALTZUSTAND: ✍️ Menü + 1–6; 6 async mit Cache)
 // ============================================================
 "use strict";
 
@@ -7,11 +8,8 @@ const { runOnboarding } = require("../free/onboarding-engine");
 const { handleFreeUpload } = require("../free/dropbox-engine");
 const { getState, setState } = require("./state");
 const legalLawyer = require("../modules/legal-lawyer");
-
-// ✅ ADD-ON: Discord Message Splitter (bereits gebaut)
 const { splitForDiscord } = require("./message-splitter");
 
-// Reactions (bestehend, unverändert)
 let routeReaction = async () => {};
 try {
   const r = require("../free/reaction-correction-engine");
@@ -32,38 +30,34 @@ async function routeDM(message) {
     const userId = message.author.id;
     const content = message.content?.trim();
 
-    // 1️⃣ Onboarding
+    // 1) Onboarding
     const onboardingHandled = await runOnboarding(message);
     if (onboardingHandled) return;
 
     const state = getState(userId);
 
-    // 2️⃣ Upload
+    // 2) Upload
     if (state.onboarded && message.attachments?.size > 0) {
       await handleFreeUpload(message);
       return;
     }
 
-    // 3️⃣ ✍️ Emoji als Text (Fallback)
+    // 3) ✍️ zeigt Menü
     if (content === "✍️") {
       const menu = legalLawyer.replyMenu?.();
       if (menu) {
-        const parts = splitForDiscord(menu);
-        for (const part of parts) {
-          await message.reply(part);
-        }
+        for (const part of splitForDiscord(menu)) await message.reply(part);
         return;
       }
     }
 
-    // 4️⃣ Auswahl 1–6 → legal-lawyer
+    // 4) Auswahl 1–6
     if (/^[1-6]$/.test(content)) {
       const lastAnalysis = state.lastLegalAnalysis || {};
 
-      // ✅ OPTION 6: Async (OpenAI-Vertiefung) – Add-on
+      // 6 async
       if (content === "6" && typeof legalLawyer.handleReplyRequestAsync === "function") {
         const rawText = state.lastLegalRawText || "";
-
         const cache = {
           hash: state.lastLegalAIHash || "",
           review: state.lastLegalAIReview || null
@@ -77,41 +71,30 @@ async function routeDM(message) {
         );
 
         if (res && res.message) {
-          // Cache speichern (nur wenn vorhanden)
           if (res.aiHash && res.aiReview) {
             setState(userId, {
               lastLegalAIHash: res.aiHash,
               lastLegalAIReview: res.aiReview
             });
           }
-
-          const parts = splitForDiscord(res.message);
-          for (const part of parts) {
-            await message.reply(part);
-          }
+          for (const part of splitForDiscord(res.message)) await message.reply(part);
           return;
         }
       }
 
-      // 1–5 bleiben wie gehabt (sync)
-      const res = legalLawyer.handleReplyRequest(content, lastAnalysis);
+      // 1–5 sync
+      const res = legalLawyer.handleReplyRequest?.(content, lastAnalysis);
       if (res && res.message) {
-        const parts = splitForDiscord(res.message);
-        for (const part of parts) {
-          await message.reply(part);
-        }
+        for (const part of splitForDiscord(res.message)) await message.reply(part);
         return;
       }
     }
 
-    // 5️⃣ Fallback
+    // 5) Fallback
     if (content) {
       const fallback =
         "👍 Alles klar.\n📄 Du kannst mir jederzeit ein weiteres Dokument schicken – ich bin bereit 😊";
-      const parts = splitForDiscord(fallback);
-      for (const part of parts) {
-        await message.reply(part);
-      }
+      for (const part of splitForDiscord(fallback)) await message.reply(part);
     }
   } catch (err) {
     console.error("❌ ROUTER ERROR:", err);

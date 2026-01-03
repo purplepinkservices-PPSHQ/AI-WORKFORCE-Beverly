@@ -1,5 +1,6 @@
 // ============================================================
 // Datei: src/orchestrator/analysis-orchestrator.js
+// ✅ ALTZUSTAND: legal-lawyer Modul Hook + data = modResult
 // ============================================================
 "use strict";
 
@@ -10,7 +11,7 @@ const { detectDocumentDate } = require("../engines/date-engine");
 const { detectCategoryFromKeywords } = require("../keywords");
 
 /* =========================================================
-   🧩 Modul Loader: legal-lawyer (robust)
+   Modul Loader: legal-lawyer (robust)
    ========================================================= */
 function loadLegalLawyerModule() {
   try {
@@ -26,12 +27,7 @@ function loadLegalLawyerModule() {
     const analyze = analyzer.analyze || analyzer.run || analyzer;
     const feedback = output.feedback || output.render || output.format || output;
 
-    return {
-      id: "legal-lawyer",
-      matches,
-      analyze,
-      feedback
-    };
+    return { id: "legal-lawyer", matches, analyze, feedback };
   } catch (_) {}
 
   return null;
@@ -40,7 +36,7 @@ function loadLegalLawyerModule() {
 const legalLawyer = loadLegalLawyerModule();
 
 /* =========================================================
-   🔧 MINIMAL: Authority/Behörden Keywords
+   MINIMAL: Authority Keywords
    ========================================================= */
 const AUTHORITY_KEYWORDS = [
   "hauptzollamt",
@@ -71,7 +67,7 @@ function hasAuthorityKeyword(text = "") {
 }
 
 /* =========================================================
-   🔧 MINIMAL: Betreff extrahieren
+   Betreff extrahieren
    ========================================================= */
 function extractSubject(rawText = "") {
   const lines = String(rawText)
@@ -92,7 +88,7 @@ function extractSubject(rawText = "") {
 }
 
 /* =========================================================
-   🧠 ANALYSE (stabil + Modul-Hook als ADD-ON)
+   ANALYSE
    ========================================================= */
 async function analyzeDocument({ ocrResult }) {
   const rawText = (ocrResult?.text || "").trim();
@@ -109,7 +105,6 @@ async function analyzeDocument({ ocrResult }) {
   const authorityHit = hasAuthorityKeyword(headerText + "\n" + rawText);
 
   const safeType = typeResult?.type || "Unklar";
-
   let safeCategory =
     keywordCategoryResult?.category || typeResult?.category || safeType;
 
@@ -118,7 +113,6 @@ async function analyzeDocument({ ocrResult }) {
   const safeDate = dateResult?.date || null;
   const subject = extractSubject(rawText);
 
-  // ✅ Base analysis (nur generische Engines)
   const analysis = {
     type: safeType,
     category: safeCategory,
@@ -134,11 +128,7 @@ async function analyzeDocument({ ocrResult }) {
     )
   };
 
-  /* =========================================================
-     🧩 MODUL-AUSLÖSUNG (ADD-ON)
-     WICHTIG: Wir geben die angereicherte Modul-Analyse als "data" zurück,
-     damit Option 6 (und 1–5) echte deadline/amounts/objections sehen.
-     ========================================================= */
+  // Modul Hook
   let moduleResponse = null;
 
   if (legalLawyer && typeof legalLawyer.matches === "function") {
@@ -151,7 +141,6 @@ async function analyzeDocument({ ocrResult }) {
 
     if (shouldRun && typeof legalLawyer.analyze === "function") {
       try {
-        // ✅ modResult ist die "echte" Legal-Analyse (deadline/amounts/objections/type etc.)
         const modResult = legalLawyer.analyze(analysis, rawText);
 
         const msg =
@@ -163,8 +152,7 @@ async function analyzeDocument({ ocrResult }) {
           module: legalLawyer.id || "legal-lawyer",
           message: msg || null,
           reactions: ["✍️"],
-          // ✅ DAS ist der Fix: enriched data für State/Option 6
-          data: (modResult && typeof modResult === "object") ? modResult : null
+          data: modResult && typeof modResult === "object" ? modResult : null
         };
       } catch {
         moduleResponse = null;

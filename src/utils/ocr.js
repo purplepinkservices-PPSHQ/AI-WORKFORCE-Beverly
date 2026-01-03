@@ -20,7 +20,7 @@ function detectPdfType(buffer) {
 }
 
 /* =========================================================
-   🔴 OCR ENTRYPOINT
+   🔴 OCR ENTRYPOINT (STABIL)
    ========================================================= */
 async function runOCR({ buffer, filePath, mimeType }) {
   if (!buffer || !Buffer.isBuffer(buffer)) {
@@ -48,19 +48,38 @@ async function runOCR({ buffer, filePath, mimeType }) {
       }
 
       const images = await convertPdfToImages(filePath);
-
-      return await runVisionOCR({
+      const visionResult = await runVisionOCR({
         images,
         source: "pdf-scan"
       });
+
+      if (visionResult?.skipped) {
+        console.log("➡️ Vision OCR skipped – leerer OCR-Text");
+        return {
+          source: "pdf-scan",
+          text: ""
+        };
+      }
+
+      return visionResult;
     }
   }
 
   /* ===================== IMAGE ===================== */
-  return await runVisionOCR({
+  const visionResult = await runVisionOCR({
     images: [buffer],
     source: "image"
   });
+
+  if (visionResult?.skipped) {
+    console.log("➡️ Vision OCR skipped – leerer OCR-Text");
+    return {
+      source: "image",
+      text: ""
+    };
+  }
+
+  return visionResult;
 }
 
 module.exports = { runOCR };
