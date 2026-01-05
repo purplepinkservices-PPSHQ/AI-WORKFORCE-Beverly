@@ -3,7 +3,13 @@
 const userState = new Map();
 
 function getState(userId) {
-  return userState.get(userId) || { onboarded: false };
+  return (
+    userState.get(userId) || {
+      onboarded: false,
+      phase: null,
+      session: null
+    }
+  );
 }
 
 function setState(userId, data) {

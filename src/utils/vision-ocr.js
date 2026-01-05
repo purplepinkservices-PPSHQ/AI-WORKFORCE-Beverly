@@ -4,62 +4,52 @@ const OpenAI = require("openai");
 const client = new OpenAI();
 
 /* =========================================================
-   🔴 VISION OCR (RATE-LIMIT-SAFE)
+   🔴 VISION OCR (LEERER TEXT VERBOTEN)
    ========================================================= */
 async function runVisionOCR({ images, source }) {
-  if (!images || !Array.isArray(images) || images.length === 0) {
-    throw new Error("runVisionOCR: keine Bilder erhalten");
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("runVisionOCR: keine Bilder");
   }
 
   try {
-    const content = images.map((img) => {
-      const base64 = Buffer.isBuffer(img)
-        ? img.toString("base64")
-        : img;
-
-      return {
-        type: "input_image",
-        image_url: `data:image/png;base64,${base64}`
-      };
-    });
+    const content = images.map((img) => ({
+      type: "input_image",
+      image_url: `data:image/png;base64,${
+        Buffer.isBuffer(img) ? img.toString("base64") : img
+      }`
+    }));
 
     const response = await client.responses.create({
       model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text:
-                "TRANSKRIBIERE den Inhalt 1:1 (keine Zusammenfassung, keine Umformulierung). " +
-                "WICHTIG: Erfasse ALLES inklusive Briefkopf/Logo, Absenderblock, Empfänger/Adressfeld, Datum, Ort, Betreff, " +
-                "Aktenzeichen/Kundennummer, Anlagen, Fußzeile, Stempel/Unterschrift. " +
-                "Gib den Text in Original-Reihenfolge aus und lass nichts weg."
-            },
-            ...content
-          ]
-        }
-      ]
+      input: [{
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "TRANSKRIBIERE den Inhalt 1:1. " +
+              "ALLES erfassen: Briefkopf, Absender, Empfänger, Datum, Aktenzeichen, Text, Fußzeile."
+          },
+          ...content
+        ]
+      }]
     });
+
+    const text = response.output_text || "";
 
     return {
       source,
-      text: response.output_text || ""
+      text: text.trim()
     };
   } catch (err) {
     if (err.status === 429 || err.code === "rate_limit_exceeded") {
-      console.warn("⚠️ Vision OCR übersprungen (OpenAI Rate Limit)");
-
+      console.warn("⚠️ Vision Rate-Limit → leerer Text verhindert");
       return {
-        source,
-        text: "",
-        skipped: true,
-        reason: "rate_limit"
+        source: source + "-rate-limit",
+        text: "[OCR temporär nicht verfügbar]"
       };
     }
-
-    throw err; // alles andere bleibt HART
+    throw err;
   }
 }
 

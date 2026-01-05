@@ -1,107 +1,168 @@
 // ============================================================
 // Datei: src/system/router.js
-// ✅ ROUTER (ALTZUSTAND: ✍️ Menü + 1–6; 6 async mit Cache)
 // ============================================================
 "use strict";
 
-const { runOnboarding } = require("../free/onboarding-engine");
-const { handleFreeUpload } = require("../free/dropbox-engine");
 const { getState, setState } = require("./state");
-const legalLawyer = require("../modules/legal-lawyer");
-const { splitForDiscord } = require("./message-splitter");
+const { resolvePlan } = require("./plan-resolver");
+const { runOnboarding } = require("./onboarding-engine");
+const { analyzeDocument } = require("../core/analyze-document");
+const { renderMenu } = require("../ui/menu-renderer");
 
-let routeReaction = async () => {};
-try {
-  const r = require("../free/reaction-correction-engine");
-  routeReaction =
-    r.routeReaction ||
-    r.handleReaction ||
-    r.onReaction ||
-    r.default ||
-    routeReaction;
-} catch {}
+// Module (Phase 3B)
+const { getModuleReaction: financeModule } = require("../modules/finance-module");
+const { getModuleReaction: legalModule } = require("../modules/legal-module");
+const { getModuleReaction: healthModule } = require("../modules/health-module");
 
 async function routeDM(message) {
-  try {
-    if (!message || !message.author) return;
-    if (message.author.bot) return;
-    if (message.guild) return;
+  if (message.author.bot) return;
 
-    const userId = message.author.id;
-    const content = message.content?.trim();
+  const userId = message.author.id;
+  const hasAttachment = message.attachments?.size > 0;
+  const text = message.content?.trim();
 
-    // 1) Onboarding
-    const onboardingHandled = await runOnboarding(message);
-    if (onboardingHandled) return;
+  const state = getState(userId);
 
-    const state = getState(userId);
+  // ------------------------------------------------------------
+  // PHASE 3 – AKTION AUSWÄHLEN & SOFORT VERARBEITEN
+  // ------------------------------------------------------------
+  if (state?.awaitingAction && /^[1-3]$/.test(text)) {
+    const index = Number(text) - 1;
+    const action = state.awaitingAction.actions[index];
 
-    // 2) Upload
-    if (state.onboarded && message.attachments?.size > 0) {
-      await handleFreeUpload(message);
+    if (!action) {
+      await message.reply("❌ Ungültige Auswahl.");
       return;
     }
 
-    // 3) ✍️ zeigt Menü
-    if (content === "✍️") {
-      const menu = legalLawyer.replyMenu?.();
-      if (menu) {
-        for (const part of splitForDiscord(menu)) await message.reply(part);
-        return;
-      }
+    let response = "✅ Aktion verarbeitet.";
+
+    if (action === "ABLEGEN") {
+      response = "📁 Verstanden. Das Dokument wird später einfach abgelegt.";
+    } else if (action === "PRUEFEN") {
+      response = "🔍 Verstanden. Ich bereite eine fachliche Prüfung vor.";
+    } else if (action === "TERMIN") {
+      response = "📅 Verstanden. Ich merke mir eine mögliche Frist.";
     }
 
-    // 4) Auswahl 1–6
-    if (/^[1-6]$/.test(content)) {
-      const lastAnalysis = state.lastLegalAnalysis || {};
+    setState(userId, {
+      awaitingAction: null,
+      phase: "PHASE_3_DONE",
+      session: "abgeschlossen"
+    });
 
-      // 6 async
-      if (content === "6" && typeof legalLawyer.handleReplyRequestAsync === "function") {
-        const rawText = state.lastLegalRawText || "";
-        const cache = {
-          hash: state.lastLegalAIHash || "",
-          review: state.lastLegalAIReview || null
-        };
-
-        const res = await legalLawyer.handleReplyRequestAsync(
-          content,
-          lastAnalysis,
-          rawText,
-          cache
-        );
-
-        if (res && res.message) {
-          if (res.aiHash && res.aiReview) {
-            setState(userId, {
-              lastLegalAIHash: res.aiHash,
-              lastLegalAIReview: res.aiReview
-            });
-          }
-          for (const part of splitForDiscord(res.message)) await message.reply(part);
-          return;
-        }
-      }
-
-      // 1–5 sync
-      const res = legalLawyer.handleReplyRequest?.(content, lastAnalysis);
-      if (res && res.message) {
-        for (const part of splitForDiscord(res.message)) await message.reply(part);
-        return;
-      }
-    }
-
-    // 5) Fallback
-    if (content) {
-      const fallback =
-        "👍 Alles klar.\n📄 Du kannst mir jederzeit ein weiteres Dokument schicken – ich bin bereit 😊";
-      for (const part of splitForDiscord(fallback)) await message.reply(part);
-    }
-  } catch (err) {
-    console.error("❌ ROUTER ERROR:", err);
-    try {
-      await message.reply("⚠️ Kurz hakt es intern. Versuch es bitte nochmal.");
-    } catch {}
+    await message.reply(`✅ Auswahl gespeichert: ${action}`);
+    await message.reply(response);
+    return;
   }
+
+  // ------------------------------------------------------------
+  // PHASE 0 – Aktivierung
+  // ------------------------------------------------------------
+  setState(userId, { phase: "PHASE_0", session: "aktiv" });
+
+  // ------------------------------------------------------------
+  // 📄 DOKUMENT KOMMT → PHASE 1 → PHASE 2 → PHASE 3
+  // ------------------------------------------------------------
+  if (hasAttachment) {
+    if (!state.onboarded) {
+      setState(userId, {
+        onboarded: true,
+        onboardingStep: null
+      });
+    }
+
+    setState(userId, { phase: "PHASE_1" });
+    await message.reply("📄 Dokument erhalten. Ich schaue es mir an …");
+
+    try {
+      const attachment = message.attachments.first();
+      const buffer = Buffer.from(
+        await fetch(attachment.url).then((res) => res.arrayBuffer())
+      );
+
+      const result = await analyzeDocument({
+        userId,
+        fileBuffer: buffer,
+        images: null
+      });
+
+      console.log("📊 PHASE 2 RESULT:", {
+        state: result.score.state,
+        score: result.score.score,
+        type: result.type.type,
+        category: result.category.category,
+        module: result.module
+      });
+
+      // --------------------------------------------------------
+      // PHASE 3B – Fachliche Modul-Reaktion
+      // --------------------------------------------------------
+      let moduleReaction = {
+        text: "ℹ️ Kein passendes Modul gefunden.",
+        actions: []
+      };
+
+      if (result.module === "finance-module") {
+        moduleReaction = financeModule({
+          state: result.score.state,
+          category: result.category.category,
+          document: null
+        });
+      } else if (result.module === "legal-module") {
+        moduleReaction = legalModule({
+          state: result.score.state,
+          category: result.category.category,
+          document: null
+        });
+      } else if (result.module === "health-module") {
+        moduleReaction = healthModule({
+          state: result.score.state,
+          category: result.category.category,
+          document: null
+        });
+      }
+
+      const menu = renderMenu({
+        state: result.score.state,
+        category: result.category.category,
+        module: result.module,
+        text: moduleReaction.text,
+        actions: moduleReaction.actions
+      });
+
+      setState(userId, {
+        phase: "PHASE_3",
+        awaitingAction: {
+          actions: moduleReaction.actions
+        }
+      });
+
+      await message.reply(menu.text);
+    } catch (err) {
+      console.error("❌ ANALYZE ERROR:", err.message);
+      await message.reply("❌ Fehler beim Verarbeiten des Dokuments.");
+    }
+
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // 🗣️ KEIN DOKUMENT → Onboarding / Begrüßung
+  // ------------------------------------------------------------
+  if (!state.onboarded) {
+    const handled = await runOnboarding(message);
+    if (handled) return;
+  }
+
+  const plan = resolvePlan(userId);
+  setState(userId, { plan: plan.plan, phase: null });
+
+  await message.reply("👉 Schick mir bitte ein Dokument (PDF / Bild).");
+}
+
+async function routeReaction(reaction, user) {
+  // Nicht genutzt
 }
 
 module.exports = { routeDM, routeReaction };
