@@ -1,58 +1,56 @@
 "use strict";
 
 // ============================================================
-// Finance Module
-// Phase 3B – Fachliche Modul-Reaktion (MINIMAL)
-// Intern: Haushalt, Versicherung, Wohnen, Einkommen, Steuer
-// Vertrag:
-// getModuleReaction({ state, category, document }) -> { text, actions }
+// Finance Module Dispatcher
 // ============================================================
 
-function getModuleReaction({ state, category, document }) {
-  // ABBRUCH
-  if (state === "ABBRUCH") {
+const { getHouseholdMenu } = require("./finance/household");
+const { getTaxMenu } = require("./finance/tax");
+const { getInsuranceMenu } = require("./finance/insurance");
+
+function getModuleReaction({ state, category }) {
+  // ------------------------------------------------------------
+  // FINANCE GATE
+  // ------------------------------------------------------------
+  if (category === "versicherung") {
     return {
-      text: "❌ Es gab ein technisches Problem bei der finanziellen Einordnung.",
-      actions: []
+      text: "💼 Finanzdokument erkannt (Versicherung).\n\nWas möchtest du tun?",
+      actions: [
+        { id: "finance_open_insurance", label: "Zum Versicherungsmenü" },
+        { id: "finance_store_only", label: "Dokument nur ablegen" },
+        { id: "finance_open_legal", label: "Rechtlich prüfen" }
+      ]
     };
   }
 
-  // UNKLAR
-  if (state === "UNKLAR") {
+  if (category === "steuer") {
     return {
-      text:
-        "🤔 Ich bin mir finanziell noch nicht sicher, worum es geht.\n" +
-        "Wie möchtest du fortfahren?",
-      actions: ["PRUEFEN", "ABLEGEN"]
+      text: "💼 Finanzdokument erkannt (Steuer).\n\nWas möchtest du tun?",
+      actions: [
+        { id: "finance_open_tax", label: "Zum Steuermenü" },
+        { id: "finance_store_only", label: "Dokument nur ablegen" }
+      ]
     };
   }
 
-  // UNSICHER
-  if (state === "UNSICHER") {
+  if (category === "haushalt") {
     return {
-      text:
-        "⚠️ Finanziell erkannt, aber mit Unsicherheiten.\n" +
-        "Was möchtest du tun?",
-      actions: ["PRUEFEN", "ABLEGEN"]
+      text: "💼 Finanzdokument erkannt (Haushalt).\n\nWas möchtest du tun?",
+      actions: [
+        { id: "finance_open_household", label: "Zum Haushaltsmenü" },
+        { id: "finance_store_only", label: "Dokument nur ablegen" }
+      ]
     };
   }
 
-  // SICHER – interne Gliederung (minimal)
-  // Hinweis: category kommt aus Phase 2 (z. B. haushalt / versicherung / wohnen / einkommen / steuer)
-  let headline = "💶 Finanzrelevantes Dokument erkannt.";
-
-  if (category === "haushalt") headline = "🧾 Haushaltsdokument erkannt.";
-  if (category === "versicherung") headline = "🛡️ Versicherungsdokument erkannt.";
-  if (category === "wohnen") headline = "🏠 Wohn- & Mietdokument erkannt.";
-  if (category === "arbeit" || category === "einkommen")
-    headline = "💼 Einkommensnachweis erkannt.";
-  if (category === "steuer") headline = "🧮 Steuerrelevantes Dokument erkannt.";
-
+  // ------------------------------------------------------------
+  // FALLBACK
+  // ------------------------------------------------------------
   return {
-    text:
-      `${headline}\n` +
-      "Ich kann es prüfen, ablegen oder eine Frist vormerken.",
-    actions: ["PRUEFEN", "ABLEGEN", "TERMIN"]
+    text: "💼 Finanzdokument erkannt.\n\nWas möchtest du tun?",
+    actions: [
+      { id: "finance_store_only", label: "Dokument nur ablegen" }
+    ]
   };
 }
 

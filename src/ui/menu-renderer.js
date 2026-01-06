@@ -1,40 +1,26 @@
+// ============================================================
+// Datei: src/ui/menu-renderer.js
+// Zweck: Einheitliches Rendern von Menüs
+// ============================================================
 "use strict";
 
-// ============================================================
-// Menu Renderer
-// Phase 3 – UI-Rendering (ohne Fachlogik)
-// ============================================================
+function renderMenu({ text, actions }) {
+  let output = text;
 
-function renderMenu({ state, category, module, text, actions }) {
-  if (!actions || actions.length === 0) {
-    return { text, actions: [] };
+  if (Array.isArray(actions) && actions.length > 0) {
+    output += "\n\nBitte wähle:\n";
+
+    actions.forEach((action, index) => {
+      const label =
+        typeof action === "string"
+          ? action
+          : action?.label || "Option";
+
+      output += `${index + 1}️⃣ ${label}\n`;
+    });
   }
 
-  let numbered = actions
-    .map((a, i) => `${i + 1}️⃣ ${label(a)}`)
-    .join("\n");
-
-  return {
-    text: `${text}\nBitte wähle:\n${numbered}`,
-    actions
-  };
-}
-
-function label(action) {
-  switch (action) {
-    case "PRUEFEN":
-      return "Prüfen & Empfehlung";
-    case "ABLEGEN":
-      return "Nur ablegen";
-    case "TERMIN":
-      return "Termin / Frist setzen";
-    case "VERFOLGEN":
-      return "Verfolgen";
-    case "ANTWORT":
-      return "Antwort schreiben";
-    default:
-      return action;
-  }
+  return { text: output };
 }
 
 module.exports = { renderMenu };

@@ -7,7 +7,8 @@ function getState(userId) {
     userState.get(userId) || {
       onboarded: false,
       phase: null,
-      session: null
+      session: null,
+      documentContext: null
     }
   );
 }

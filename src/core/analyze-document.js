@@ -9,15 +9,17 @@ const { runOCR } = require("../utils/ocr");
 const { detectDocumentType } = require("../engines/document-type-engine");
 const { scoreDocument } = require("../engines/document-score-engine");
 const { detectContentCategory } = require("../engines/content-category-engine");
+const { detectFinanceCategory } = require("../engines/finance-category-engine");
 const { selectModule } = require("../engines/module-selector");
 
-async function analyzeDocument({ userId, fileBuffer, images }) {
+async function analyzeDocument({ userId, fileBuffer, images, mimeType, filePath } = {}) {
   // ------------------------------------------------------------
-  // OCR / TEXT
+  // OCR
   // ------------------------------------------------------------
   const ocrResult = await runOCR({
     buffer: fileBuffer,
-    images
+    mimeType,
+    filePath
   });
 
   const rawText = ocrResult?.text || "";
@@ -28,36 +30,42 @@ async function analyzeDocument({ userId, fileBuffer, images }) {
   const typeResult = detectDocumentType(rawText);
 
   // ------------------------------------------------------------
-  // Inhaltskategorie
+  // Grobkategorie
   // ------------------------------------------------------------
-  const categoryResult = detectContentCategory(
-    rawText,
-    typeResult.type
-  );
+  const baseCategoryResult = detectContentCategory(rawText, typeResult.type);
 
   // ------------------------------------------------------------
-  // Confidence / Zustand
+  // Finance hat Vorrang
+  // ------------------------------------------------------------
+  let finalCategory = baseCategoryResult.category;
+  let finalModule = null;
+
+  if (baseCategoryResult.category === "finance") {
+    finalCategory = detectFinanceCategory(rawText);
+    finalModule = "finance-module";
+  }
+
+  // ------------------------------------------------------------
+  // Fallback Modul-Auswahl
+  // ------------------------------------------------------------
+  if (!finalModule) {
+    finalModule = selectModule({ category: finalCategory });
+  }
+
+  // ------------------------------------------------------------
+  // Confidence
   // ------------------------------------------------------------
   const scoreResult = scoreDocument({
     type: typeResult,
-    category: categoryResult
+    category: { category: finalCategory }
   });
 
-  // ------------------------------------------------------------
-  // Modul-Auswahl (ENTSCHEIDEND)
-  // ------------------------------------------------------------
-  const module = selectModule({
-    category: categoryResult.category
-  });
-
-  // ------------------------------------------------------------
-  // Phase-2-Ergebnis (VERTRAG)
-  // ------------------------------------------------------------
   return {
     type: typeResult,
-    category: categoryResult,
+    category: { category: finalCategory },
     score: scoreResult,
-    module
+    module: finalModule,
+    rawText
   };
 }
 

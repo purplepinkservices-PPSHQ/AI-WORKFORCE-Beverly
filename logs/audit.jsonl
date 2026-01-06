@@ -1,0 +1,14 @@
+{"timestamp":"2026-01-06T14:01:50.215Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/Kassenbon_Kaufland_2026-01-06.jpeg"}
+{"timestamp":"2026-01-06T14:08:52.197Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/Kassenbon_dm_2026-01-06.jpeg"}
+{"timestamp":"2026-01-06T14:10:01.835Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/Kassenbon_dm_2026-01-06.jpeg"}
+{"timestamp":"2026-01-06T14:27:18.707Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/Kassenbon_dm_2026-01-06.jpeg"}
+{"timestamp":"2026-01-06T14:33:58.010Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T14:36:46.333Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T14:41:38.871Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T14:44:51.142Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T14:50:04.335Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T15:26:01.399Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T15:41:29.984Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/haushalt/2026-01-06_Kassenbon_Kaufland_0,00€"}
+{"timestamp":"2026-01-06T15:59:40.033Z","phase":"PHASE_4","result":"STORED","confidence":0.65,"module":"finance-module","storagePath":"/2026/Januar/versicherung/2026-01-06_Bank_Unbekannt_0,00€"}
+{"timestamp":"2026-01-06T16:03:44.008Z","phase":"PHASE_4","result":"STORED","confidence":0.65,"module":"finance-module","storagePath":"/2026/Januar/versicherung/2026-01-06_versicherung_R+V_0,00€"}
+{"timestamp":"2026-01-06T18:00:49.895Z","phase":"PHASE_4","result":"STORED","confidence":0.65,"module":"finance-module","storagePath":"/2024/März/versicherung/2024-03-13_versicherung_R+V_0,00€"}

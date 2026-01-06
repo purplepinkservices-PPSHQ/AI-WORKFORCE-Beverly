@@ -2,13 +2,7 @@
 
 // ============================================================
 // Content Category Engine
-// Bestimmt die inhaltliche Bedeutung eines Dokuments
-// Phase 2 ONLY
-//
-// Zentrale Regeln:
-// - Dokumenttyp ≠ Inhaltskategorie
-// - Dokumenttyp kann Inhaltskategorie BEGRENZEN
-// - Kontext > Keywords
+// Phase 2 – Inhaltliche Einordnung
 // ============================================================
 
 function normalize(text = "") {
@@ -20,7 +14,7 @@ function normalize(text = "") {
 }
 
 // ------------------------------------------------------------
-// Inhaltskategorien (inhaltlich, nicht formal)
+// Kategorien
 // ------------------------------------------------------------
 const CATEGORIES = {
   steuer: [
@@ -31,6 +25,26 @@ const CATEGORIES = {
     "vorsteuer",
     "elster",
     "steuererklärung"
+  ],
+
+  versicherung: [
+    "versicherung",
+    "police",
+    "versicherungsnummer",
+    "beitrag",
+    "praemie",
+    "kaution",
+    "r+v",
+    "allgemeine versicherung"
+  ],
+
+  arbeit: [
+    "abrechnung",
+    "gehalt",
+    "lohn",
+    "arbeitgeber",
+    "provision",
+    "courtage"
   ],
 
   gesundheit: [
@@ -52,59 +66,54 @@ const CATEGORIES = {
     "einkauf",
     "strom",
     "wasser",
-    "miete",
     "nebenkosten"
   ],
 
   recht: [
+    // NUR echte Rechtseskalation
     "gericht",
+    "inkasso",
+    "vollstreckung",
+    "klage",
     "aktenzeichen",
-    "bescheid",
     "mahnung",
-    "forderung",
     "zahlungserinnerung",
     "verfahren"
-  ],
-
-  versicherung: [
-    "versicherung",
-    "police",
-    "schaden",
-    "beitrag",
-    "versicherungsnummer"
-  ],
-
-  arbeit: [
-    "abrechnung",
-    "gehalt",
-    "lohn",
-    "arbeitgeber",
-    "provision",
-    "courtage"
   ]
 };
 
 // ------------------------------------------------------------
-// Hauptfunktion
+// Hauptlogik
 // ------------------------------------------------------------
 function detectContentCategory(rawText = "", documentType = null) {
   const text = normalize(rawText);
 
   // =========================================================
-  // HARTE ARCHITEKTUR-REGEL (robust)
+  // HARTE REGEL: KASSENBON → HAUSHALT
   // =========================================================
   if (
     documentType &&
     String(documentType).toLowerCase().includes("kassenbon")
   ) {
+    return { category: "haushalt", confidence: 0.95 };
+  }
+
+  // =========================================================
+  // Versicherung schlägt Recht (ARCHITEKTURREGEL)
+  // =========================================================
+  const insuranceHits = CATEGORIES.versicherung.filter((k) =>
+    text.includes(k)
+  ).length;
+
+  if (insuranceHits > 0) {
     return {
-      category: "haushalt",
-      confidence: 0.95
+      category: "versicherung",
+      confidence: Math.min(0.95, 0.6 + insuranceHits * 0.1)
     };
   }
 
   // =========================================================
-  // Scoring-Logik (nur wenn keine harte Regel greift)
+  // Normales Scoring
   // =========================================================
   const scores = {};
 
@@ -118,10 +127,7 @@ function detectContentCategory(rawText = "", documentType = null) {
   );
 
   if (!bestMatch || bestScore === 0) {
-    return {
-      category: "unklar",
-      confidence: 0.3
-    };
+    return { category: "unklar", confidence: 0.3 };
   }
 
   return {
