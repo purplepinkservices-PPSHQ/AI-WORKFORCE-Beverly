@@ -1,55 +1,68 @@
+// ============================================================
+// Datei: src/modules/finance-module.js
+// ============================================================
 "use strict";
 
-// ============================================================
-// Finance Module Dispatcher
-// ============================================================
-
-const { getHouseholdMenu } = require("./finance/household");
-const { getTaxMenu } = require("./finance/tax");
+// Einheitliche Finance-Untermodule
+const { getModuleReaction: taxModule } = require("./finance/tax");
+const { getModuleReaction: householdModule } = require("./finance/household");
 const { getInsuranceMenu } = require("./finance/insurance");
 
 function getModuleReaction({ state, category }) {
   // ------------------------------------------------------------
-  // FINANCE GATE
+  // FINANCE START (kein Untermodul aktiv)
+  // ------------------------------------------------------------
+  if (!category || category === "finance") {
+    return {
+      text:
+        "💼 Finanzdokument erkannt.\n\n" +
+        "Bitte wähle den passenden Bereich:",
+      actions: [
+        { id: "FINANCE_SELECT_STEUER", label: "Steuer" },
+        { id: "FINANCE_SELECT_HAUSHALT", label: "Haushalt" },
+        { id: "FINANCE_SELECT_VERSICHERUNG", label: "Versicherung" },
+        { id: "FINANCE_SELECT_EINKOMMEN", label: "Einkommen" },
+        { id: "FINANCE_SELECT_WOHNEN", label: "Wohnen" },
+        { id: "FINANCE_STORE_ONLY", label: "Dokument nur ablegen" }
+      ]
+    };
+  }
+
+  // ------------------------------------------------------------
+  // STEUER
+  // ------------------------------------------------------------
+  if (category === "steuer") {
+    return taxModule({ state });
+  }
+
+  // ------------------------------------------------------------
+  // HAUSHALT
+  // ------------------------------------------------------------
+  if (category === "haushalt") {
+    return householdModule({ state });
+  }
+
+  // ------------------------------------------------------------
+  // VERSICHERUNG
   // ------------------------------------------------------------
   if (category === "versicherung") {
-    return {
-      text: "💼 Finanzdokument erkannt (Versicherung).\n\nWas möchtest du tun?",
-      actions: [
-        { id: "finance_open_insurance", label: "Zum Versicherungsmenü" },
-        { id: "finance_store_only", label: "Dokument nur ablegen" },
-        { id: "finance_open_legal", label: "Rechtlich prüfen" }
-      ]
-    };
-  }
-
-  if (category === "steuer") {
-    return {
-      text: "💼 Finanzdokument erkannt (Steuer).\n\nWas möchtest du tun?",
-      actions: [
-        { id: "finance_open_tax", label: "Zum Steuermenü" },
-        { id: "finance_store_only", label: "Dokument nur ablegen" }
-      ]
-    };
-  }
-
-  if (category === "haushalt") {
-    return {
-      text: "💼 Finanzdokument erkannt (Haushalt).\n\nWas möchtest du tun?",
-      actions: [
-        { id: "finance_open_household", label: "Zum Haushaltsmenü" },
-        { id: "finance_store_only", label: "Dokument nur ablegen" }
-      ]
-    };
+    return getInsuranceMenu();
   }
 
   // ------------------------------------------------------------
-  // FALLBACK
+  // FALLBACK (sicher)
   // ------------------------------------------------------------
   return {
-    text: "💼 Finanzdokument erkannt.\n\nWas möchtest du tun?",
+    text:
+      "💼 Finanzdokument erkannt.\n\n" +
+      "Bitte wähle den passenden Bereich:",
     actions: [
-      { id: "finance_store_only", label: "Dokument nur ablegen" }
+      { id: "FINANCE_SELECT_STEUER", label: "Steuer" },
+      { id: "FINANCE_SELECT_HAUSHALT", label: "Haushalt" },
+      { id: "FINANCE_SELECT_VERSICHERUNG", label: "Versicherung" },
+      { id: "FINANCE_SELECT_EINKOMMEN", label: "Einkommen" },
+      { id: "FINANCE_SELECT_WOHNEN", label: "Wohnen" },
+      { id: "FINANCE_STORE_ONLY", label: "Dokument nur ablegen" }
     ]
   };
 }

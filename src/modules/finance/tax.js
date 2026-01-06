@@ -1,20 +1,41 @@
-// ============================================================
-// Datei: src/modules/finance/tax.js
-// Modul: Finance → Steuer (v1)
-// Scope: Menü + Struktur (keine Fachlogik)
-// ============================================================
 "use strict";
 
-function getModuleReaction({ state, category, document }) {
+// ============================================================
+// Steuer-Modul v1
+// NUR Menü & Struktur – keine Fachlogik
+// Wird ausschließlich über das Finance-Modul aufgerufen
+// ============================================================
+
+function getModuleReaction({ state }) {
+  // ------------------------------------------------------------
+  // Unsicheres Dokument
+  // ------------------------------------------------------------
+  if (state === "UNSICHER") {
+    return {
+      text:
+        "🧾 Steuerdokument erkannt, aber mit Unsicherheiten.\n\n" +
+        "Was möchtest du tun?",
+      actions: [
+        "Dokument prüfen",
+        "Unterlagen für Steuer sammeln",
+        "Dokument nur ablegen"
+      ]
+    };
+  }
+
+  // ------------------------------------------------------------
+  // Sicheres Dokument
+  // ------------------------------------------------------------
   return {
     text:
       "🧾 Steuerdokument erkannt.\n\n" +
       "Was möchtest du tun?",
     actions: [
-      { id: "tax_prepare", label: "Unterlagen für Steuer" },
-      { id: "tax_check", label: "Dokument prüfen" },
-      { id: "tax_self_disclosure", label: "Eigenauskunft / Haushaltsbuch" },
-      { id: "tax_deadline", label: "Frist / Termin" }
+      "Unterlagen für Steuer",
+      "Dokument prüfen",
+      "Eigenauskunft / Haushaltsbuch",
+      "Frist / Termin",
+      "Dokument nur ablegen"
     ]
   };
 }

@@ -11,8 +11,9 @@ const { renderMenu } = require("../ui/menu-renderer");
 const { storeDocument } = require("../engines/dropbox-engine");
 const { writeAuditLog } = require("./audit-log");
 const { handleAuditChatCommand } = require("./audit-chat");
+const { getDomainSwitchMenu } = require("./domain-switch");
 
-// Module (Phase 3B)
+// Module
 const { getModuleReaction: financeModule } = require("../modules/finance-module");
 const { getModuleReaction: legalModule } = require("../modules/legal-module");
 const { getModuleReaction: healthModule } = require("../modules/health-module");
@@ -20,32 +21,174 @@ const { getModuleReaction: healthModule } = require("../modules/health-module");
 async function routeDM(message) {
   if (message.author.bot) return;
 
+  const userId = message.author.id;
+  const text = message.content?.trim();
+  const hasAttachment = message.attachments?.size > 0;
+  const state = getState(userId);
+
   // ------------------------------------------------------------
-  // STEP 6.2.1 – AUDIT CHAT COMMANDS (READ ONLY)
+  // AUDIT CHAT COMMANDS
   // ------------------------------------------------------------
   const auditHandled = await handleAuditChatCommand(message);
   if (auditHandled) return;
 
-  const userId = message.author.id;
-  const hasAttachment = message.attachments?.size > 0;
-  const text = message.content?.trim();
-  const state = getState(userId);
+  // ------------------------------------------------------------
+  // ANDEREN_BEREICH → DOMAIN SWITCH
+  // ------------------------------------------------------------
+  if (state?.awaitingAction && state.documentContext && text === "4") {
+    const domainMenu = getDomainSwitchMenu();
+    const rendered = renderMenu({
+      text: domainMenu.text,
+      actions: domainMenu.actions
+    });
+
+    setState(userId, {
+      phase: "DOMAIN_SWITCH",
+      documentContext: state.documentContext,
+      awaitingAction: { actions: domainMenu.actions }
+    });
+
+    await message.reply(rendered.text);
+    return;
+  }
 
   // ------------------------------------------------------------
-  // PHASE 3 → PHASE 4 – SPEICHERN + AUDIT
+  // DOMAIN SWITCH ZIEL
+  // ------------------------------------------------------------
+  if (state?.phase === "DOMAIN_SWITCH" && state.documentContext) {
+    let moduleReaction = null;
+
+    if (text === "1") {
+      moduleReaction = financeModule({
+        state: state.documentContext.state,
+        category: "finance"
+      });
+      state.documentContext.module = "finance-module";
+    }
+
+    if (text === "2") {
+      moduleReaction = legalModule({
+        state: state.documentContext.state,
+        category: state.documentContext.category
+      });
+      state.documentContext.module = "legal-module";
+    }
+
+    if (text === "3") {
+      moduleReaction = healthModule({
+        state: state.documentContext.state,
+        category: state.documentContext.category
+      });
+      state.documentContext.module = "health-module";
+    }
+
+    if (moduleReaction) {
+      const menu = renderMenu({
+        text: moduleReaction.text,
+        actions: moduleReaction.actions
+      });
+
+      setState(userId, {
+        phase: "PHASE_3",
+        awaitingAction: { actions: moduleReaction.actions },
+        documentContext: state.documentContext
+      });
+
+      await message.reply(menu.text);
+      return;
+    }
+  }
+
+  // ------------------------------------------------------------
+  // FINANCE START → UNTERMODUL AUSWAHL (1–6)
+  // ------------------------------------------------------------
+  if (
+    state?.phase === "PHASE_3" &&
+    state.documentContext?.module === "finance-module" &&
+    Array.isArray(state.awaitingAction?.actions) &&
+    /^[1-6]$/.test(text)
+  ) {
+    const index = Number(text) - 1;
+    const action = state.awaitingAction.actions[index];
+
+    if (!action || !action.id) {
+      await message.reply("❌ Auswahl nicht verfügbar.");
+      return;
+    }
+
+    if (action.id === "FINANCE_STORE_ONLY") {
+      const storageResult = await storeDocument(state.documentContext);
+
+      await writeAuditLog({
+        timestamp: new Date().toISOString(),
+        phase: "PHASE_4",
+        result: "STORED",
+        confidence: state.documentContext.score,
+        module: "finance-module",
+        storagePath: storageResult.storagePath
+      });
+
+      setState(userId, {
+        phase: "PHASE_4_DONE",
+        awaitingAction: null,
+        documentContext: null
+      });
+
+      await message.reply(
+        "✅ Dokument gespeichert\n\n" +
+          `📂 Ablage: ${storageResult.storagePath}\n` +
+          `📄 Name: ${storageResult.fileName}\n\n` +
+          "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊"
+      );
+      return;
+    }
+
+    const map = {
+      FINANCE_SELECT_STEUER: "steuer",
+      FINANCE_SELECT_HAUSHALT: "haushalt",
+      FINANCE_SELECT_VERSICHERUNG: "versicherung",
+      FINANCE_SELECT_EINKOMMEN: "einkommen",
+      FINANCE_SELECT_WOHNEN: "wohnen"
+    };
+
+    const nextCategory = map[action.id];
+    if (!nextCategory) {
+      await message.reply("❌ Auswahl nicht unterstützt.");
+      return;
+    }
+
+    state.documentContext.category = nextCategory;
+
+    const moduleReaction = financeModule({
+      state: state.documentContext.state,
+      category: nextCategory
+    });
+
+    const menu = renderMenu({
+      text: moduleReaction.text,
+      actions: moduleReaction.actions
+    });
+
+    setState(userId, {
+      phase: "PHASE_3",
+      awaitingAction: { actions: moduleReaction.actions },
+      documentContext: state.documentContext
+    });
+
+    await message.reply(menu.text);
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // PHASE 3 → PHASE 4 – NUR ABLEGEN
   // ------------------------------------------------------------
   if (state?.awaitingAction && /^[1-3]$/.test(text)) {
     const index = Number(text) - 1;
     const action = state.awaitingAction.actions[index];
 
-    if (!action || !state.documentContext) {
-      await message.reply("❌ Vorgang nicht verfügbar.");
-      return;
-    }
+    if (action?.label === "Dokument nur ablegen") {
+      const storageResult = await storeDocument(state.documentContext);
 
-    const storageResult = await storeDocument(state.documentContext);
-
-    try {
       await writeAuditLog({
         timestamp: new Date().toISOString(),
         phase: "PHASE_4",
@@ -54,125 +197,88 @@ async function routeDM(message) {
         module: state.documentContext.module,
         storagePath: storageResult.storagePath
       });
-    } catch (e) {
-      console.error("⚠️ AUDIT LOG ERROR:", e?.message || e);
-    }
-
-    setState(userId, {
-      awaitingAction: null,
-      documentContext: null,
-      phase: "PHASE_4_DONE",
-      session: "abgeschlossen"
-    });
-
-    await message.reply(
-      "✅ Dokument gespeichert\n\n" +
-        `📂 Ablage: ${storageResult.storagePath}\n` +
-        `📄 Name: ${storageResult.fileName}\n\n` +
-        "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊"
-    );
-    return;
-  }
-
-  // ------------------------------------------------------------
-  // PHASE 0 – Aktivierung
-  // ------------------------------------------------------------
-  setState(userId, { phase: "PHASE_0", session: "aktiv" });
-
-  // ------------------------------------------------------------
-  // 📄 DOKUMENT KOMMT → PHASE 1–3
-  // ------------------------------------------------------------
-  if (hasAttachment) {
-    if (!state.onboarded) {
-      setState(userId, { onboarded: true, onboardingStep: null });
-    }
-
-    setState(userId, { phase: "PHASE_1" });
-    await message.reply("📄 Dokument erhalten. Ich schaue es mir an …");
-
-    try {
-      const attachment = message.attachments.first();
-
-      const buffer = Buffer.from(
-        await fetch(attachment.url).then((res) => res.arrayBuffer())
-      );
-
-      const analysis = await analyzeDocument({
-        userId,
-        fileBuffer: buffer,
-        images: null,
-        mimeType: attachment.contentType || null,
-        filePath: attachment.name || null
-      });
-
-      const documentContext = {
-        userId,
-        buffer,
-        documentType: analysis.type.type,
-        category: analysis.category.category,
-        module: analysis.module,
-        score: analysis.score.score,
-        state: analysis.score.state,
-        rawText: analysis.rawText || ""
-      };
-
-      console.log("📦 DOCUMENT CONTEXT READY", {
-        module: documentContext.module,
-        category: documentContext.category,
-        state: documentContext.state,
-        score: documentContext.score
-      });
-
-      let moduleReaction = {
-        text: "ℹ️ Kein passendes Modul gefunden.",
-        actions: []
-      };
-
-      if (analysis.module === "finance-module") {
-        moduleReaction = financeModule({
-          state: analysis.score.state,
-          category: analysis.category.category,
-          document: null
-        });
-      } else if (analysis.module === "legal-module") {
-        moduleReaction = legalModule({
-          state: analysis.score.state,
-          category: analysis.category.category,
-          document: null
-        });
-      } else if (analysis.module === "health-module") {
-        moduleReaction = healthModule({
-          state: analysis.score.state,
-          category: analysis.category.category,
-          document: null
-        });
-      }
-
-      const menu = renderMenu({
-        state: analysis.score.state,
-        category: analysis.category.category,
-        module: analysis.module,
-        text: moduleReaction.text,
-        actions: moduleReaction.actions
-      });
 
       setState(userId, {
-        phase: "PHASE_3",
-        awaitingAction: { actions: moduleReaction.actions },
-        documentContext
+        phase: "PHASE_4_DONE",
+        awaitingAction: null,
+        documentContext: null
       });
 
-      await message.reply(menu.text);
-    } catch (err) {
-      console.error("❌ ANALYZE ERROR:", err);
-      await message.reply("❌ Fehler beim Verarbeiten des Dokuments.");
+      await message.reply(
+        "✅ Dokument gespeichert\n\n" +
+          `📂 Ablage: ${storageResult.storagePath}\n` +
+          `📄 Name: ${storageResult.fileName}\n\n` +
+          "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊"
+      );
+      return;
+    }
+  }
+
+  // ------------------------------------------------------------
+  // DOKUMENT HOCHGELADEN
+  // ------------------------------------------------------------
+  if (hasAttachment) {
+    if (!state.onboarded) setState(userId, { onboarded: true });
+
+    await message.reply("📄 Dokument erhalten. Ich schaue es mir an …");
+
+    const attachment = message.attachments.first();
+    const buffer = Buffer.from(
+      await fetch(attachment.url).then((res) => res.arrayBuffer())
+    );
+
+    const analysis = await analyzeDocument({
+      userId,
+      fileBuffer: buffer
+    });
+
+    const documentContext = {
+      userId,
+      buffer,
+      documentType: analysis.type.type,
+      category: analysis.category.category,
+      module: analysis.module,
+      score: analysis.score.score,
+      state: analysis.score.state,
+      rawText: analysis.rawText || ""
+    };
+
+    let moduleReaction = financeModule({
+      state: analysis.score.state,
+      category: analysis.category.category
+    });
+
+    if (analysis.module === "legal-module") {
+      moduleReaction = legalModule({
+        state: analysis.score.state,
+        category: analysis.category.category
+      });
     }
 
+    if (analysis.module === "health-module") {
+      moduleReaction = healthModule({
+        state: analysis.score.state,
+        category: analysis.category.category
+      });
+    }
+
+    const menu = renderMenu({
+      text: moduleReaction.text,
+      actions: moduleReaction.actions
+    });
+
+    setState(userId, {
+      phase: "PHASE_3",
+      awaitingAction: { actions: moduleReaction.actions },
+      documentContext
+    });
+
+    await message.reply(menu.text);
     return;
   }
 
   // ------------------------------------------------------------
-  // 🗣️ KEIN DOKUMENT → ONBOARDING / Fallback
+  // FALLBACK
   // ------------------------------------------------------------
   if (!state.onboarded) {
     const handled = await runOnboarding(message);
@@ -185,6 +291,6 @@ async function routeDM(message) {
   await message.reply("👉 Schick mir bitte ein Dokument (PDF / Bild).");
 }
 
-async function routeReaction(reaction, user) {}
+async function routeReaction() {}
 
 module.exports = { routeDM, routeReaction };
