@@ -26,16 +26,13 @@ async function routeDM(message) {
   const hasAttachment = message.attachments?.size > 0;
   const state = getState(userId);
 
-  // ------------------------------------------------------------
-  // AUDIT CHAT COMMANDS
-  // ------------------------------------------------------------
   const auditHandled = await handleAuditChatCommand(message);
   if (auditHandled) return;
 
   // ------------------------------------------------------------
-  // ANDEREN_BEREICH → DOMAIN SWITCH
+  // DOMAIN SWITCH (ANDERER BEREICH)
   // ------------------------------------------------------------
-  if (state?.awaitingAction && state.documentContext && text === "4") {
+  if (state?.awaitingAction && state.documentContext && text === "6") {
     const domainMenu = getDomainSwitchMenu();
     const rendered = renderMenu({
       text: domainMenu.text,
@@ -100,13 +97,13 @@ async function routeDM(message) {
   }
 
   // ------------------------------------------------------------
-  // FINANCE START → UNTERMODUL AUSWAHL (1–6)
+  // FINANCE → UNTERMODUL AUSWAHL (1–7)
   // ------------------------------------------------------------
   if (
     state?.phase === "PHASE_3" &&
     state.documentContext?.module === "finance-module" &&
     Array.isArray(state.awaitingAction?.actions) &&
-    /^[1-6]$/.test(text)
+    /^[1-7]$/.test(text)
   ) {
     const index = Number(text) - 1;
     const action = state.awaitingAction.actions[index];
@@ -161,7 +158,8 @@ async function routeDM(message) {
 
     const moduleReaction = financeModule({
       state: state.documentContext.state,
-      category: nextCategory
+      category: nextCategory,
+      fromFinanceSelection: true
     });
 
     const menu = renderMenu({
@@ -177,41 +175,6 @@ async function routeDM(message) {
 
     await message.reply(menu.text);
     return;
-  }
-
-  // ------------------------------------------------------------
-  // PHASE 3 → PHASE 4 – NUR ABLEGEN
-  // ------------------------------------------------------------
-  if (state?.awaitingAction && /^[1-3]$/.test(text)) {
-    const index = Number(text) - 1;
-    const action = state.awaitingAction.actions[index];
-
-    if (action?.label === "Dokument nur ablegen") {
-      const storageResult = await storeDocument(state.documentContext);
-
-      await writeAuditLog({
-        timestamp: new Date().toISOString(),
-        phase: "PHASE_4",
-        result: "STORED",
-        confidence: state.documentContext.score,
-        module: state.documentContext.module,
-        storagePath: storageResult.storagePath
-      });
-
-      setState(userId, {
-        phase: "PHASE_4_DONE",
-        awaitingAction: null,
-        documentContext: null
-      });
-
-      await message.reply(
-        "✅ Dokument gespeichert\n\n" +
-          `📂 Ablage: ${storageResult.storagePath}\n` +
-          `📄 Name: ${storageResult.fileName}\n\n` +
-          "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊"
-      );
-      return;
-    }
   }
 
   // ------------------------------------------------------------
@@ -277,9 +240,6 @@ async function routeDM(message) {
     return;
   }
 
-  // ------------------------------------------------------------
-  // FALLBACK
-  // ------------------------------------------------------------
   if (!state.onboarded) {
     const handled = await runOnboarding(message);
     if (handled) return;

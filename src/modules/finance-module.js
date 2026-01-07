@@ -3,14 +3,24 @@
 // ============================================================
 "use strict";
 
-// Einheitliche Finance-Untermodule
+// Finance-Untermodule
 const { getModuleReaction: taxModule } = require("./finance/tax");
-const { getModuleReaction: householdModule } = require("./finance/household");
+const { getModuleReaction: householdModule } = require("./finance/household/index");
 const { getInsuranceMenu } = require("./finance/insurance");
 
-function getModuleReaction({ state, category }) {
+function getModuleReaction({ state, category, fromFinanceSelection }) {
+
   // ------------------------------------------------------------
-  // FINANCE START (kein Untermodul aktiv)
+  // DIREKT AUS FINANCE-AUSWAHL → SUBMODUL
+  // ------------------------------------------------------------
+  if (fromFinanceSelection) {
+    if (category === "steuer") return taxModule({ state });
+    if (category === "haushalt") return householdModule({ state });
+    if (category === "versicherung") return getInsuranceMenu();
+  }
+
+  // ------------------------------------------------------------
+  // FINANCE STARTMENÜ
   // ------------------------------------------------------------
   if (!category || category === "finance") {
     return {
@@ -23,30 +33,10 @@ function getModuleReaction({ state, category }) {
         { id: "FINANCE_SELECT_VERSICHERUNG", label: "Versicherung" },
         { id: "FINANCE_SELECT_EINKOMMEN", label: "Einkommen" },
         { id: "FINANCE_SELECT_WOHNEN", label: "Wohnen" },
+        { id: "FINANCE_BACK_TO_MAIN", label: "Anderen Bereich wählen" },
         { id: "FINANCE_STORE_ONLY", label: "Dokument nur ablegen" }
       ]
     };
-  }
-
-  // ------------------------------------------------------------
-  // STEUER
-  // ------------------------------------------------------------
-  if (category === "steuer") {
-    return taxModule({ state });
-  }
-
-  // ------------------------------------------------------------
-  // HAUSHALT
-  // ------------------------------------------------------------
-  if (category === "haushalt") {
-    return householdModule({ state });
-  }
-
-  // ------------------------------------------------------------
-  // VERSICHERUNG
-  // ------------------------------------------------------------
-  if (category === "versicherung") {
-    return getInsuranceMenu();
   }
 
   // ------------------------------------------------------------
@@ -62,6 +52,7 @@ function getModuleReaction({ state, category }) {
       { id: "FINANCE_SELECT_VERSICHERUNG", label: "Versicherung" },
       { id: "FINANCE_SELECT_EINKOMMEN", label: "Einkommen" },
       { id: "FINANCE_SELECT_WOHNEN", label: "Wohnen" },
+      { id: "FINANCE_BACK_TO_MAIN", label: "Anderen Bereich wählen" },
       { id: "FINANCE_STORE_ONLY", label: "Dokument nur ablegen" }
     ]
   };

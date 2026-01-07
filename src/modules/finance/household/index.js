@@ -1,21 +1,22 @@
 "use strict";
 
 // ============================================================
-// Finance – Household Submodule (v1)
+// Finance / Household – Entry (v1)
+// STEP 6.3 – Haushalt (Menü & Struktur)
+// ============================================================
+//
+// Vertrag:
+// - Keine Fachlogik
+// - Keine Automatisierung
+// - Reines UX-Menü
+// - Wird ausschließlich vom Finance-Dispatcher aufgerufen
 // ============================================================
 
-function getHouseholdMenu() {
-  return {
-    text:
-      "🧾 Haushaltsdokument erkannt.\n\n" +
-      "Was möchtest du tun?",
-    actions: [
-      { id: "finance_household_store", label: "Nur ablegen" },
-      { id: "finance_household_note", label: "Notiz hinzufügen" },
-      { id: "finance_household_overview", label: "Haushaltsübersicht" },
-      { id: "finance_back", label: "Zurück" }
-    ]
-  };
+const { getHouseholdMenu } = require("./household-menu");
+
+function getModuleReaction({ state }) {
+  // UNSICHER kann später differenziert werden
+  return getHouseholdMenu({ state });
 }
 
-module.exports = { getHouseholdMenu };
+module.exports = { getModuleReaction };
