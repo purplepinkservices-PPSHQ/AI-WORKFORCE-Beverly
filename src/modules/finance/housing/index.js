@@ -1,22 +1,21 @@
 "use strict";
 
 // ============================================================
-// Finance – Housing Submodule (v1)
+// Finance / Housing – Entry (v1)
+// STEP 6.6 – Wohnen & Miete (Menü & Struktur)
+// ============================================================
+//
+// Vertrag:
+// - Keine Fachlogik
+// - Keine Automatisierung
+// - Reines UX-Menü
+// - Aufruf ausschließlich über Finance-Dispatcher
 // ============================================================
 
-function getHousingMenu() {
-  return {
-    text:
-      "🏠 Wohn- oder Vertragsdokument erkannt.\n\n" +
-      "Was möchtest du tun?",
-    actions: [
-      { id: "finance_housing_check", label: "Dokument prüfen" },
-      { id: "finance_housing_summary", label: "Übersicht erstellen" },
-      { id: "finance_housing_letter", label: "Schreiben erstellen" },
-      { id: "finance_housing_deadline", label: "Frist / Termin" },
-      { id: "finance_back", label: "Zurück" }
-    ]
-  };
+const { getHousingMenu } = require("./housing-menu");
+
+function getModuleReaction({ state }) {
+  return getHousingMenu({ state });
 }
 
-module.exports = { getHousingMenu };
+module.exports = { getModuleReaction };

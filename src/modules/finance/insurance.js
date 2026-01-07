@@ -9,12 +9,7 @@ function getInsuranceMenu() {
   return {
     text:
       "🛡️ Versicherungsdokument erkannt.\n\n" +
-      "Was möchtest du tun?\n\n" +
-      "1️⃣ Übersicht erstellen\n" +
-      "2️⃣ Bedarfsanalyse\n" +
-      "3️⃣ Angebot vergleichen\n" +
-      "4️⃣ Police prüfen\n" +
-      "5️⃣ Schadensmeldung / Leistungsantrag",
+      "Was möchtest du tun?",
     actions: [
       { id: "insurance_overview", label: "Übersicht erstellen" },
       { id: "insurance_needs", label: "Bedarfsanalyse" },

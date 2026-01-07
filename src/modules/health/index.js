@@ -1,15 +1,18 @@
 "use strict";
 
 // ============================================================
-// Health Module – Adapter auf neues Health v1
+// Health – Entry (v1)
+// STEP 6.7 – Gesundheit (Menü & Struktur)
 // ============================================================
 //
 // Vertrag:
-// getModuleReaction({ state, category, document })
-// → { text, actions }
+// - Keine Diagnose
+// - Keine Bewertung
+// - Keine Automatisierung
+// - Reines UX-Menü
 // ============================================================
 
-const { getHealthMenu } = require("./health/health-menu");
+const { getHealthMenu } = require("./health-menu");
 
 function getModuleReaction({ state }) {
   return getHealthMenu({ state });

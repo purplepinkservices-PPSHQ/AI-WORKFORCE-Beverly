@@ -14,9 +14,15 @@ const { handleAuditChatCommand } = require("./audit-chat");
 const { getDomainSwitchMenu } = require("./domain-switch");
 
 // Module
-const { getModuleReaction: financeModule } = require("../modules/finance-module");
-const { getModuleReaction: legalModule } = require("../modules/legal-module");
-const { getModuleReaction: healthModule } = require("../modules/health-module");
+const { getModuleReaction: financeModule } =
+  require("../modules/finance-module");
+
+// 🔴 EINZIGE ÄNDERUNG HIER
+const { getModuleReaction: legalModule } =
+  require("../modules/legal/index");
+
+const { getModuleReaction: healthModule } =
+  require("../modules/health-module");
 
 async function routeDM(message) {
   if (message.author.bot) return;

@@ -1,23 +1,22 @@
 "use strict";
 
 // ============================================================
-// Finance – Insurance Submodule (v1)
+// Finance / Insurance – Entry (v1)
+// STEP 6.4 – Versicherung (Menü & Struktur)
+// ============================================================
+//
+// Vertrag:
+// - Keine Fachlogik
+// - Keine Automatisierung
+// - Reines UX-Menü
+// - Wird ausschließlich vom Finance-Dispatcher aufgerufen
 // ============================================================
 
-function getInsuranceMenu() {
-  return {
-    text:
-      "🛡️ Versicherungsdokument erkannt.\n\n" +
-      "Was möchtest du tun?",
-    actions: [
-      { id: "finance_insurance_overview", label: "Übersicht erstellen" },
-      { id: "finance_insurance_analysis", label: "Bedarfsanalyse" },
-      { id: "finance_insurance_compare", label: "Angebote vergleichen" },
-      { id: "finance_insurance_check", label: "Police prüfen" },
-      { id: "finance_insurance_claim", label: "Schadensmeldung / Leistungsantrag" },
-      { id: "finance_back", label: "Zurück" }
-    ]
-  };
+const { getInsuranceMenu } = require("./insurance-menu");
+
+function getModuleReaction({ state }) {
+  // UNSICHER kann später differenziert werden
+  return getInsuranceMenu({ state });
 }
 
-module.exports = { getInsuranceMenu };
+module.exports = { getModuleReaction };

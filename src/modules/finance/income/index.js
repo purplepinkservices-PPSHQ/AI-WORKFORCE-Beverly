@@ -1,21 +1,21 @@
 "use strict";
 
 // ============================================================
-// Finance – Income Submodule (v1)
+// Finance / Income – Entry (v1)
+// STEP 6.5 – Einkommen (Menü & Struktur)
+// ============================================================
+//
+// Vertrag:
+// - Keine Fachlogik
+// - Keine Automatisierung
+// - Reines UX-Menü
+// - Aufruf ausschließlich über Finance-Dispatcher
 // ============================================================
 
-function getIncomeMenu() {
-  return {
-    text:
-      "💰 Einkommensdokument erkannt.\n\n" +
-      "Was möchtest du tun?",
-    actions: [
-      { id: "finance_income_overview", label: "Einkommensübersicht" },
-      { id: "finance_income_verify", label: "Abrechnung prüfen" },
-      { id: "finance_income_report", label: "Eigenauskunft erstellen" },
-      { id: "finance_back", label: "Zurück" }
-    ]
-  };
+const { getIncomeMenu } = require("./income-menu");
+
+function getModuleReaction({ state }) {
+  return getIncomeMenu({ state });
 }
 
-module.exports = { getIncomeMenu };
+module.exports = { getModuleReaction };
