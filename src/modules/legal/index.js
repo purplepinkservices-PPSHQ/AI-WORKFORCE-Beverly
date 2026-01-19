@@ -1,19 +1,20 @@
 "use strict";
 
 // ============================================================
-// Legal – Entry (v1)
-// STEP 6.8 – Recht (Menü & Struktur)
-// ============================================================
-//
-// Vertrag:
-// - Keine Rechtsberatung
-// - Keine automatische Bewertung
-// - Reines UX-Menü
+// Legal – Entry (v1 mit Actions)
 // ============================================================
 
 const { getLegalMenu } = require("./legal-menu");
+const { handleLegalAction } = require("./legal-actions");
 
-function getModuleReaction({ state }) {
+function getModuleReaction({ state, actionId, documentContext }) {
+
+  // Aktion wurde gewählt
+  if (actionId) {
+    return handleLegalAction({ actionId, documentContext });
+  }
+
+  // Standard: Menü anzeigen
   return getLegalMenu({ state });
 }
 

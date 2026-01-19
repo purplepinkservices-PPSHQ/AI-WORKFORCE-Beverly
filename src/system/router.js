@@ -17,9 +17,8 @@ const { getDomainSwitchMenu } = require("./domain-switch");
 const { getModuleReaction: financeModule } =
   require("../modules/finance-module");
 
-// 🔴 EINZIGE ÄNDERUNG HIER
 const { getModuleReaction: legalModule } =
-  require("../modules/legal/index");
+  require("../modules/legal-module");
 
 const { getModuleReaction: healthModule } =
   require("../modules/health-module");
@@ -36,14 +35,11 @@ async function routeDM(message) {
   if (auditHandled) return;
 
   // ------------------------------------------------------------
-  // DOMAIN SWITCH (ANDERER BEREICH)
+  // DOMAIN SWITCH (Menü öffnen)
   // ------------------------------------------------------------
   if (state?.awaitingAction && state.documentContext && text === "6") {
     const domainMenu = getDomainSwitchMenu();
-    const rendered = renderMenu({
-      text: domainMenu.text,
-      actions: domainMenu.actions
-    });
+    const rendered = renderMenu(domainMenu);
 
     setState(userId, {
       phase: "DOMAIN_SWITCH",
@@ -59,10 +55,10 @@ async function routeDM(message) {
   // DOMAIN SWITCH ZIEL
   // ------------------------------------------------------------
   if (state?.phase === "DOMAIN_SWITCH" && state.documentContext) {
-    let moduleReaction = null;
+    let reaction = null;
 
     if (text === "1") {
-      moduleReaction = financeModule({
+      reaction = financeModule({
         state: state.documentContext.state,
         category: "finance"
       });
@@ -70,7 +66,7 @@ async function routeDM(message) {
     }
 
     if (text === "2") {
-      moduleReaction = legalModule({
+      reaction = legalModule({
         state: state.documentContext.state,
         category: state.documentContext.category
       });
@@ -78,32 +74,100 @@ async function routeDM(message) {
     }
 
     if (text === "3") {
-      moduleReaction = healthModule({
+      reaction = healthModule({
         state: state.documentContext.state,
         category: state.documentContext.category
       });
       state.documentContext.module = "health-module";
     }
 
-    if (moduleReaction) {
-      const menu = renderMenu({
-        text: moduleReaction.text,
-        actions: moduleReaction.actions
-      });
+    const menu = renderMenu(reaction);
+    setState(userId, {
+      phase: "PHASE_3",
+      awaitingAction: { actions: reaction.actions },
+      documentContext: state.documentContext
+    });
 
-      setState(userId, {
-        phase: "PHASE_3",
-        awaitingAction: { actions: moduleReaction.actions },
-        documentContext: state.documentContext
-      });
-
-      await message.reply(menu.text);
-      return;
-    }
+    await message.reply(menu.text);
+    return;
   }
 
   // ------------------------------------------------------------
-  // FINANCE → UNTERMODUL AUSWAHL (1–7)
+  // 🔴 LEGAL → ACTION HANDLING (inkl. STORE)
+  // ------------------------------------------------------------
+  if (
+    state?.phase === "PHASE_3" &&
+    state.documentContext?.module === "legal-module" &&
+    Array.isArray(state.awaitingAction?.actions) &&
+    /^[1-6]$/.test(text)
+  ) {
+    const index = Number(text) - 1;
+    const action = state.awaitingAction.actions[index];
+
+    if (!action?.id) {
+      await message.reply("❌ Auswahl nicht verfügbar.");
+      return;
+    }
+
+    // ✅ LEGAL: DIREKT SPEICHERN
+    if (action.id === "LEGAL_STORE_ONLY") {
+      const storageResult = await storeDocument(state.documentContext);
+
+      await writeAuditLog({
+        timestamp: new Date().toISOString(),
+        phase: "PHASE_4",
+        result: "STORED",
+        confidence: state.documentContext.score,
+        module: "legal-module",
+        storagePath: storageResult.storagePath
+      });
+
+      setState(userId, {
+        phase: "PHASE_4_DONE",
+        awaitingAction: null,
+        documentContext: null
+      });
+
+      await message.reply(
+        "✅ Dokument gespeichert\n\n" +
+          `📂 Ablage: ${storageResult.storagePath}\n` +
+          `📄 Name: ${storageResult.fileName}\n\n` +
+          "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊"
+      );
+      return;
+    }
+
+    const reaction = legalModule({
+      state: state.documentContext.state,
+      category: state.documentContext.category,
+      action: action.id,
+      documentContext: state.documentContext
+    });
+
+    if (!reaction.actions || reaction.actions.length === 0) {
+      setState(userId, {
+        phase: "PHASE_3_DONE",
+        awaitingAction: null,
+        documentContext: state.documentContext
+      });
+
+      await message.reply(reaction.text);
+      return;
+    }
+
+    const menu = renderMenu(reaction);
+    setState(userId, {
+      phase: "PHASE_3",
+      awaitingAction: { actions: reaction.actions },
+      documentContext: state.documentContext
+    });
+
+    await message.reply(menu.text);
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // FINANCE → UNTERMODUL AUSWAHL (unverändert)
   // ------------------------------------------------------------
   if (
     state?.phase === "PHASE_3" &&
@@ -162,20 +226,16 @@ async function routeDM(message) {
 
     state.documentContext.category = nextCategory;
 
-    const moduleReaction = financeModule({
+    const reaction = financeModule({
       state: state.documentContext.state,
       category: nextCategory,
       fromFinanceSelection: true
     });
 
-    const menu = renderMenu({
-      text: moduleReaction.text,
-      actions: moduleReaction.actions
-    });
-
+    const menu = renderMenu(reaction);
     setState(userId, {
       phase: "PHASE_3",
-      awaitingAction: { actions: moduleReaction.actions },
+      awaitingAction: { actions: reaction.actions },
       documentContext: state.documentContext
     });
 
@@ -212,33 +272,29 @@ async function routeDM(message) {
       rawText: analysis.rawText || ""
     };
 
-    let moduleReaction = financeModule({
+    let reaction = financeModule({
       state: analysis.score.state,
       category: analysis.category.category
     });
 
     if (analysis.module === "legal-module") {
-      moduleReaction = legalModule({
+      reaction = legalModule({
         state: analysis.score.state,
         category: analysis.category.category
       });
     }
 
     if (analysis.module === "health-module") {
-      moduleReaction = healthModule({
+      reaction = healthModule({
         state: analysis.score.state,
         category: analysis.category.category
       });
     }
 
-    const menu = renderMenu({
-      text: moduleReaction.text,
-      actions: moduleReaction.actions
-    });
-
+    const menu = renderMenu(reaction);
     setState(userId, {
       phase: "PHASE_3",
-      awaitingAction: { actions: moduleReaction.actions },
+      awaitingAction: { actions: reaction.actions },
       documentContext
     });
 
@@ -257,6 +313,4 @@ async function routeDM(message) {
   await message.reply("👉 Schick mir bitte ein Dokument (PDF / Bild).");
 }
 
-async function routeReaction() {}
-
-module.exports = { routeDM, routeReaction };
+module.exports = { routeDM };

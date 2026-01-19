@@ -2,143 +2,206 @@
 
 // ============================================================
 // Datei: src/engines/dropbox-engine.js
-// Phase 4 – Abschluss & Speicherung (FINAL, STABIL)
+// STEP 12.5 – Storage nutzt Facts Engine (Hybrid, LLM-safe)
+// Version: v1.3 – Amount-Sanitizer (Komma/Punkt/Cents-Fehler korrigieren)
 // ============================================================
 
 const { uploadToDropbox } = require("../utils/dropbox");
+const { extractDocumentFacts } = require("../core/document-facts-engine");
 
 /* ============================================================
-   NORMALISIERUNG
+   HELPERS
 ============================================================ */
-function normalizeText(raw = "") {
-  return String(raw)
-    .toLowerCase()
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/ß/g, "ss")
-    .replace(/[^\p{L}\p{N} %.,€\n\-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function formatAmountEUR(amount) {
+  if (typeof amount !== "number" || !isFinite(amount)) return "0,00";
+  return amount.toFixed(2).replace(".", ",");
 }
 
-/* ============================================================
-   📅 DATUM – ULTRA ROBUST (OCR-SICHER)
-============================================================ */
-function detectDocumentDate(rawText = "") {
-  const text = normalizeText(rawText);
-
-  // akzeptiert:
-  // 13.03.2024 | 13 03 2024 | 13-03-2024 | 13/03/2024
-  // 13. märz 2024 | 13 mar 2024
-  const match = text.match(
-    /([0-3]?\d)[.\-/\s]+([01]?\d|jan|feb|mar|apr|mai|jun|jul|aug|sep|okt|nov|dez)[.\-/\s]+(20\d{2})/
-  );
-
-  if (!match) return null;
-
-  let [, d, m, y] = match;
-
-  const monthMap = {
-    jan: "01",
-    feb: "02",
-    mar: "03",
-    apr: "04",
-    mai: "05",
-    jun: "06",
-    jul: "07",
-    aug: "08",
-    sep: "09",
-    okt: "10",
-    nov: "11",
-    dez: "12"
-  };
-
-  m = m.toLowerCase();
-  if (monthMap[m]) m = monthMap[m];
-
-  d = d.padStart(2, "0");
-  m = String(m).padStart(2, "0");
-
-  return `${y}-${m}-${d}`;
+function safeEntityName(name) {
+  const s = String(name || "Unbekannt").trim();
+  return s.replace(/[\\/:*?"<>|]/g, "_");
 }
 
-/* ============================================================
-   🏷️ ABSENDER / ENTITY
-============================================================ */
-function detectEntity(rawText = "") {
-  const text = normalizeText(rawText);
+/**
+ * Extrahiert alle "typischen" Euro-Beträge aus OCR-Text:
+ * - 2.578,00
+ * - 2578,00
+ * - 2,578.00 (OCR/ENG Mischform)
+ */
+function extractAmountCandidatesFromText(rawText = "") {
+  const text = String(rawText || "");
 
-  if (text.includes("r+v") || text.includes("ruv")) return "R+V";
-  if (text.includes("allianz")) return "Allianz";
-  if (text.includes("huk")) return "HUK";
-  if (text.includes("axa")) return "AXA";
-  if (text.includes("ergo")) return "ERGO";
+  // Kandidaten als Strings sammeln
+  const candidates = new Set();
 
-  return "Unbekannt";
-}
+  // EU-Format: 1.234,56 oder 1234,56
+  const euMatches = text.match(/\b\d{1,3}(?:\.\d{3})*(?:,\d{2})\b|\b\d+(?:,\d{2})\b/g);
+  if (euMatches) euMatches.forEach(x => candidates.add(x));
 
-/* ============================================================
-   💶 BETRAG – VERSICHERUNG / RECHNUNG
-============================================================ */
-function detectAmount(rawText = "") {
-  const text = normalizeText(rawText);
+  // Misch/OCR: 1,234.56 oder 1234.56
+  const usMatches = text.match(/\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/g);
+  if (usMatches) usMatches.forEach(x => candidates.add(x));
 
-  // mehrere Raten: "am 18.03.2024 346,50 eur"
-  const datedAmounts = [...text.matchAll(
-    /am\s+[0-3]?\d[.\-/][01]?\d[.\-/]20\d{2}\s+([0-9]+[.,][0-9]{2})/g
-  )];
-
-  if (datedAmounts.length > 0) {
-    return datedAmounts.map(m => m[1].replace(".", ",")).join("_");
+  // In Zahlen umwandeln (robust)
+  const parsed = [];
+  for (const s of candidates) {
+    const v = parseMoneyToNumber(s);
+    if (typeof v === "number" && isFinite(v) && v > 0) parsed.push(v);
   }
 
-  // klassische Summe
-  const sumMatch = text.match(/summe[^0-9]*([0-9]+[.,][0-9]{2})/);
-  if (sumMatch) {
-    return sumMatch[1].replace(".", ",");
+  // Duplikate raus
+  return Array.from(new Set(parsed));
+}
+
+function parseMoneyToNumber(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+
+  // Heuristik:
+  // - Wenn sowohl "." als auch "," vorkommen:
+  //   EU: "." = Tausender, "," = Dezimal
+  //   US: "," = Tausender, "." = Dezimal
+  const hasDot = str.includes(".");
+  const hasComma = str.includes(",");
+
+  if (hasDot && hasComma) {
+    // Entscheide nach letztem Trenner:
+    const lastDot = str.lastIndexOf(".");
+    const lastComma = str.lastIndexOf(",");
+
+    if (lastComma > lastDot) {
+      // EU-typisch: 2.578,00
+      const normalized = str.replace(/\./g, "").replace(",", ".");
+      return Number(normalized);
+    } else {
+      // US-typisch: 2,578.00
+      const normalized = str.replace(/,/g, "");
+      return Number(normalized);
+    }
   }
 
-  return "0,00";
+  // Nur Komma: 2578,00
+  if (hasComma && !hasDot) {
+    return Number(str.replace(",", "."));
+  }
+
+  // Nur Punkt: 2578.00
+  if (hasDot && !hasComma) {
+    return Number(str);
+  }
+
+  // Keine Trenner: nicht als Geld werten
+  return null;
+}
+
+/**
+ * Korrigiert typische "Cents als Euro"-Fehler:
+ * Beispiel: 257800 -> soll 2578,00 sein.
+ *
+ * Strategie:
+ * 1) Wenn amount sehr groß ist (>= 100000), prüfe ob /100 oder /1000 plausibel ist.
+ * 2) Verifiziere gegen Kandidaten aus rawText.
+ * 3) Wenn rawText Kandidaten hat, nimm den "besten Match".
+ */
+function sanitizeTotalAmount(amountNumber, rawText = "") {
+  if (typeof amountNumber !== "number" || !isFinite(amountNumber) || amountNumber <= 0) {
+    return amountNumber;
+  }
+
+  const candidates = extractAmountCandidatesFromText(rawText);
+
+  // Wenn wir Kandidaten im Text haben: nutze sie als Ground Truth
+  if (candidates.length > 0) {
+    // 1) direkter Match (innerhalb 1 Cent)
+    const direct = candidates.find(v => Math.abs(v - amountNumber) <= 0.01);
+    if (direct) return direct;
+
+    // 2) Skalierungs-Match (Cents/Euro-Shift)
+    // z.B. 257800 -> 2578.00 (divide by 100)
+    const scaledOptions = [amountNumber / 100, amountNumber / 1000, amountNumber / 10000];
+
+    for (const opt of scaledOptions) {
+      const match = candidates.find(v => Math.abs(v - opt) <= 0.01);
+      if (match) return match;
+    }
+
+    // 3) Wenn nichts matched: nimm den Kandidaten, der "am ehesten" zu amountNumber passt,
+    // aber bevorzuge vernünftige Größenordnungen (<= 200000) — Behördenbeträge selten 7-stellig
+    let best = candidates[0];
+    let bestScore = Infinity;
+
+    for (const v of candidates) {
+      const score = Math.abs(v - amountNumber);
+      if (score < bestScore) {
+        best = v;
+        bestScore = score;
+      }
+    }
+
+    // Wenn amountNumber absurd groß ist, aber Text-Kandidaten deutlich kleiner sind,
+    // dann nehmen wir den Text-Kandidaten.
+    if (amountNumber >= 100000 && best < amountNumber / 10) {
+      return best;
+    }
+
+    // ansonsten: beste Annäherung
+    return best;
+  }
+
+  // Ohne Kandidaten im Text: nur defensives Scaling bei "absurd groß"
+  if (amountNumber >= 100000) {
+    // Sehr häufig: Centverschiebung
+    const opt = amountNumber / 100;
+    if (opt > 0 && opt < 100000) return opt;
+  }
+
+  return amountNumber;
 }
 
 /* ============================================================
-   📂 STORAGE PFAD (BELEGDATUM!)
+   📂 STORAGE PFAD
 ============================================================ */
-function buildStoragePath({ date, category }) {
+function buildStoragePath(date) {
   const d = new Date(date);
   const year = d.getFullYear();
   const month = d.toLocaleString("de-DE", { month: "long" });
-
-  return `/${year}/${month}/${category}`;
+  return `/${year}/${month}`;
 }
 
 /* ============================================================
-   📄 DATEINAME (ARCHITEKTURREGEL)
+   📄 DATEINAME
 ============================================================ */
-function buildFileName({ date, category, entity, amount }) {
-  return `${date}_${category}_${entity}_${amount}€`;
+function buildFileName({ date, entity, amount }) {
+  return `${date}_${entity}_${amount}€`;
 }
 
 /* ============================================================
-   🚀 STORAGE ENTRYPOINT
+   🚀 ENTRYPOINT
 ============================================================ */
 async function storeDocument(documentContext) {
-  const { buffer, category, rawText } = documentContext;
+  const { buffer, rawText } = documentContext;
 
-  const detectedDate = detectDocumentDate(rawText);
-  const date = detectedDate || new Date().toISOString().slice(0, 10);
+  // Facts sicher erzeugen (auch wenn Router sie nicht mitschickt)
+  const facts = documentContext?.facts
+    ? documentContext.facts
+    : await extractDocumentFacts({ rawText });
 
-  const entity = detectEntity(rawText);
-  const amount = detectAmount(rawText);
+  const date =
+    facts?.dates?.documentDate ||
+    new Date().toISOString().slice(0, 10);
 
-  const folderPath = buildStoragePath({ date, category });
-  const fileName = buildFileName({
-    date,
-    category,
-    entity,
-    amount
-  });
+  const entity = safeEntityName(facts?.creditor?.name || "Unbekannt");
+
+  // ✅ Betrag: Sanitizer gegen Komma/Punkt/Cents-Shift
+  let amountNumber = facts?.amounts?.total;
+  if (typeof amountNumber === "number" && isFinite(amountNumber)) {
+    amountNumber = sanitizeTotalAmount(amountNumber, rawText);
+  }
+
+  const amount = formatAmountEUR(amountNumber);
+
+  const folderPath = buildStoragePath(date);
+  const fileName = buildFileName({ date, entity, amount });
 
   await uploadToDropbox({
     buffer,
@@ -151,7 +214,8 @@ async function storeDocument(documentContext) {
     fileName,
     date,
     entity,
-    amount
+    amount,
+    facts
   };
 }
 

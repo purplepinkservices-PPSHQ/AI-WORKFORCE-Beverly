@@ -1,8 +1,9 @@
 "use strict";
 
 // ============================================================
-// Analyze Document
+// Datei: src/core/analyze-document.js
 // Phase 2 – Lesen & Verstehen
+// STEP 12.5 – Facts Engine async (Hybrid)
 // ============================================================
 
 const { runOCR } = require("../utils/ocr");
@@ -12,7 +13,15 @@ const { detectContentCategory } = require("../engines/content-category-engine");
 const { detectFinanceCategory } = require("../engines/finance-category-engine");
 const { selectModule } = require("../engines/module-selector");
 
-async function analyzeDocument({ userId, fileBuffer, images, mimeType, filePath } = {}) {
+const { extractDocumentFacts } = require("./document-facts-engine");
+
+async function analyzeDocument({
+  userId,
+  fileBuffer,
+  images,
+  mimeType,
+  filePath
+} = {}) {
   // ------------------------------------------------------------
   // OCR
   // ------------------------------------------------------------
@@ -23,6 +32,11 @@ async function analyzeDocument({ userId, fileBuffer, images, mimeType, filePath 
   });
 
   const rawText = ocrResult?.text || "";
+
+  // ------------------------------------------------------------
+  // Facts (Hybrid: Heuristik → LLM falls nötig)
+  // ------------------------------------------------------------
+  const facts = await extractDocumentFacts({ rawText });
 
   // ------------------------------------------------------------
   // Dokumenttyp
@@ -61,11 +75,13 @@ async function analyzeDocument({ userId, fileBuffer, images, mimeType, filePath 
   });
 
   return {
+    userId,
     type: typeResult,
     category: { category: finalCategory },
     score: scoreResult,
     module: finalModule,
-    rawText
+    rawText,
+    facts
   };
 }
 

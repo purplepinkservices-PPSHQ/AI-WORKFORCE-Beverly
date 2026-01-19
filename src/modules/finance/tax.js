@@ -1,43 +1,25 @@
 "use strict";
 
 // ============================================================
-// Steuer-Modul v1
-// NUR Menü & Struktur – keine Fachlogik
-// Wird ausschließlich über das Finance-Modul aufgerufen
+// Finance / Tax – LEGACY FILE (DEPRECATED)
+// ============================================================
+//
+// Dieses File ist bewusst stillgelegt.
+//
+// Historie:
+// - Frühes v0-Menü mit String-Actions
+// - NICHT vertragskonform
+//
+// Aktueller Stand:
+// - Steuer-Menüs werden ausschließlich über
+//   src/modules/finance/tax/tax-menu.js
+//   vom Finance-Dispatcher gerendert.
+//
+// WICHTIG:
+// - Nicht importieren
+// - Nicht reaktivieren
+// - Nicht erweitern
+//
 // ============================================================
 
-function getModuleReaction({ state }) {
-  // ------------------------------------------------------------
-  // Unsicheres Dokument
-  // ------------------------------------------------------------
-  if (state === "UNSICHER") {
-    return {
-      text:
-        "🧾 Steuerdokument erkannt, aber mit Unsicherheiten.\n\n" +
-        "Was möchtest du tun?",
-      actions: [
-        "Dokument prüfen",
-        "Unterlagen für Steuer sammeln",
-        "Dokument nur ablegen"
-      ]
-    };
-  }
-
-  // ------------------------------------------------------------
-  // Sicheres Dokument
-  // ------------------------------------------------------------
-  return {
-    text:
-      "🧾 Steuerdokument erkannt.\n\n" +
-      "Was möchtest du tun?",
-    actions: [
-      "Unterlagen für Steuer",
-      "Dokument prüfen",
-      "Eigenauskunft / Haushaltsbuch",
-      "Frist / Termin",
-      "Dokument nur ablegen"
-    ]
-  };
-}
-
-module.exports = { getModuleReaction };
+module.exports = {};
