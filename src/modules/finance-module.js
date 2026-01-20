@@ -4,31 +4,35 @@
 "use strict";
 
 // ------------------------------------------------------------
-// Finance-Untermodule (IMMER über index.js)
+// Helper: robustes Modul-Resolving
 // ------------------------------------------------------------
-const { getModuleReaction: taxModule } =
-  require("./finance/tax");
+function resolveModule(mod) {
+  return typeof mod === "function" ? mod : mod.getModuleReaction;
+}
 
-const { getModuleReaction: householdModule } =
-  require("./finance/household/index");
-
-const { getModuleReaction: insuranceModule } =
-  require("./finance/insurance/index");
-
-const { getModuleReaction: incomeModule } =
-  require("./finance/income/index");
-
-const { getModuleReaction: housingModule } =
-  require("./finance/housing/index");
+// ------------------------------------------------------------
+// Finance-Untermodule (robust geladen)
+// ------------------------------------------------------------
+const taxModule = resolveModule(require("./finance/tax"));
+const householdModule = resolveModule(require("./finance/household/index"));
+const insuranceModule = resolveModule(require("./finance/insurance/index"));
+const incomeModule = resolveModule(require("./finance/income/index"));
+const housingModule = resolveModule(require("./finance/housing/index"));
 
 // ============================================================
 // Finance Dispatcher
 // ============================================================
 
-function getModuleReaction({ state, category, fromFinanceSelection }) {
+function getModuleReaction({
+  state,
+  category,
+  fromFinanceSelection,
+  actionId,
+  documentContext
+}) {
 
   // ----------------------------------------------------------
-  // Weiterleitung aus Finance-Auswahl → Submodule
+  // 1) Erstaufruf aus Finance-Bereichsauswahl
   // ----------------------------------------------------------
   if (fromFinanceSelection) {
     if (category === "steuer") return taxModule({ state });
@@ -39,7 +43,30 @@ function getModuleReaction({ state, category, fromFinanceSelection }) {
   }
 
   // ----------------------------------------------------------
-  // Finance-Hauptmenü
+  // 2) Folge-Actions (category kommt vom Router)
+  // ----------------------------------------------------------
+  if (category === "steuer") {
+    return taxModule({ state, actionId, documentContext });
+  }
+
+  if (category === "haushalt") {
+    return householdModule({ state, actionId, documentContext });
+  }
+
+  if (category === "versicherung") {
+    return insuranceModule({ state, actionId, documentContext });
+  }
+
+  if (category === "einkommen") {
+    return incomeModule({ state, actionId, documentContext });
+  }
+
+  if (category === "wohnen") {
+    return housingModule({ state, actionId, documentContext });
+  }
+
+  // ----------------------------------------------------------
+  // 3) Finance-Hauptmenü
   // ----------------------------------------------------------
   return {
     text:

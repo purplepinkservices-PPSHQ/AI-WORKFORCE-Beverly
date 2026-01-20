@@ -1,7 +1,7 @@
 "use strict";
 
 // ============================================================
-// Finance / Household – Menü (v1 FINAL + Exit)
+// Finance / Household – Menü (v1 FINAL + Ledger)
 // ============================================================
 
 function getHouseholdMenu() {
@@ -16,9 +16,14 @@ function getHouseholdMenu() {
       { id: "finance_household_deadline", label: "Frist / Erinnerung" },
 
       // -----------------------------
+      // Explizites Fachmodul
+      // -----------------------------
+      { id: "finance_household_ledger", label: "📊 Haushaltsbuch (Ledger)" },
+
+      // -----------------------------
       // Navigation / Exit
       // -----------------------------
-      { id: "FINANCE_BACK_TO_MAIN", label: "Anderen Bereich wählen" }, // ← POS 5
+      { id: "FINANCE_BACK_TO_MAIN", label: "Anderen Bereich wählen" },
       { id: "FINANCE_STORE_ONLY", label: "Dokument nur ablegen" }
     ]
   };

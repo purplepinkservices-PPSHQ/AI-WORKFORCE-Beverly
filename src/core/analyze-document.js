@@ -2,8 +2,7 @@
 
 // ============================================================
 // Datei: src/core/analyze-document.js
-// Phase 2 – Lesen & Verstehen
-// STEP 12.5 – Facts Engine async (Hybrid)
+// Zweck: Analyse + zentraler Persistenzpunkt (Core DB)
 // ============================================================
 
 const { runOCR } = require("../utils/ocr");
@@ -14,17 +13,16 @@ const { detectFinanceCategory } = require("../engines/finance-category-engine");
 const { selectModule } = require("../engines/module-selector");
 
 const { extractDocumentFacts } = require("./document-facts-engine");
+const { createCoreDocument } = require("../integrations/notion/notion-core-documents");
 
 async function analyzeDocument({
   userId,
   fileBuffer,
-  images,
   mimeType,
   filePath
 } = {}) {
-  // ------------------------------------------------------------
+
   // OCR
-  // ------------------------------------------------------------
   const ocrResult = await runOCR({
     buffer: fileBuffer,
     mimeType,
@@ -33,24 +31,15 @@ async function analyzeDocument({
 
   const rawText = ocrResult?.text || "";
 
-  // ------------------------------------------------------------
-  // Facts (Hybrid: Heuristik → LLM falls nötig)
-  // ------------------------------------------------------------
+  // FACTS
   const facts = await extractDocumentFacts({ rawText });
 
-  // ------------------------------------------------------------
-  // Dokumenttyp
-  // ------------------------------------------------------------
+  // TYPE
   const typeResult = detectDocumentType(rawText);
 
-  // ------------------------------------------------------------
-  // Grobkategorie
-  // ------------------------------------------------------------
+  // CATEGORY
   const baseCategoryResult = detectContentCategory(rawText, typeResult.type);
 
-  // ------------------------------------------------------------
-  // Finance hat Vorrang
-  // ------------------------------------------------------------
   let finalCategory = baseCategoryResult.category;
   let finalModule = null;
 
@@ -59,19 +48,21 @@ async function analyzeDocument({
     finalModule = "finance-module";
   }
 
-  // ------------------------------------------------------------
-  // Fallback Modul-Auswahl
-  // ------------------------------------------------------------
   if (!finalModule) {
     finalModule = selectModule({ category: finalCategory });
   }
 
-  // ------------------------------------------------------------
-  // Confidence
-  // ------------------------------------------------------------
+  // SCORE
   const scoreResult = scoreDocument({
     type: typeResult,
     category: { category: finalCategory }
+  });
+
+  // 🔥 EINZIGER NOTION-WRITE
+  await createCoreDocument({
+    userId,
+    facts,
+    rawText
   });
 
   return {

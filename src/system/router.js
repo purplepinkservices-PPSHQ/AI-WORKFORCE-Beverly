@@ -219,25 +219,39 @@ async function routeDM(message) {
     };
 
     const nextCategory = map[action.id];
-    if (!nextCategory) {
-      await message.reply("❌ Auswahl nicht unterstützt.");
-      return;
-    }
 
-    state.documentContext.category = nextCategory;
+// --------------------------------------------
+// NEU: Finance-Folgeaktionen (z. B. Ledger)
+// --------------------------------------------
+if (!nextCategory) {
+  const reaction = financeModule({
+    state: state.documentContext.state,
+    category: state.documentContext.category,
+    actionId: action.id,
+    documentContext: state.documentContext
+  });
 
-    const reaction = financeModule({
-      state: state.documentContext.state,
-      category: nextCategory,
-      fromFinanceSelection: true
-    });
+  const menu = renderMenu(reaction);
+  setState(userId, {
+    phase: "PHASE_3",
+    awaitingAction: { actions: reaction.actions },
+    documentContext: state.documentContext
+  });
 
-    const menu = renderMenu(reaction);
-    setState(userId, {
-      phase: "PHASE_3",
-      awaitingAction: { actions: reaction.actions },
-      documentContext: state.documentContext
-    });
+  await message.reply(menu.text);
+  return;
+}
+
+// --------------------------------------------
+// BESTEHENDES VERHALTEN (unverändert)
+// --------------------------------------------
+state.documentContext.category = nextCategory;
+
+const reaction = financeModule({
+  state: state.documentContext.state,
+  category: nextCategory,
+  fromFinanceSelection: true
+});
 
     await message.reply(menu.text);
     return;
