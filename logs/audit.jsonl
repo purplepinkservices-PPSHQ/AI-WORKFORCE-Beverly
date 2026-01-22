@@ -37,3 +37,8 @@
 {"timestamp":"2026-01-20T18:51:00.022Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/2026-01-20_ALDI SÜD_16,85€"}
 {"timestamp":"2026-01-20T20:35:23.810Z","phase":"PHASE_4","result":"STORED","confidence":0.95,"module":"finance-module","storagePath":"/2026/Januar/2026-01-20_ALDI SÜD_16,85€"}
 {"timestamp":"2026-01-20T20:36:31.983Z","phase":"PHASE_4","result":"STORED","confidence":0.6,"module":"finance-module","storagePath":"/2026/Januar/2026-01-19_Alpen Hiah GmbH_44,62€"}
+{"timestamp":"2026-01-21T23:04:30.295Z","phase":"UNKNOWN","result":"STORED","confidence":null,"module":"unknown","storagePath":"/2026/Januar/2026-01-21_Unbekannt_0,00€"}
+{"timestamp":"2026-01-21T23:38:18.175Z","phase":"UNKNOWN","result":"STORED","confidence":null,"module":"unknown","storagePath":"/NaN/Invalid Date/16.01.2026_Unbekannt"}
+{"timestamp":"2026-01-21T23:51:38.959Z","phase":"UNKNOWN","result":"STORED","confidence":null,"module":"unknown","storagePath":"/2026/Januar/2026-01-16_Media Markt"}
+{"timestamp":"2026-01-22T00:03:51.779Z","phase":"PHASE_4","result":"STORED","confidence":null,"module":"unknown","storagePath":"/2026/Januar/2026-01-16_Media Markt"}
+{"timestamp":"2026-01-22T00:07:21.586Z","phase":"PHASE_4","result":"STORED","confidence":null,"module":"unknown","storagePath":"/2026/Januar/2026-01-16_Media Markt"}

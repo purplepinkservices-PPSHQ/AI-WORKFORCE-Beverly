@@ -1,5 +1,10 @@
 "use strict";
 
+// ============================================================
+// Datei: src/system/state.js
+// Zweck: Minimaler User-State (in-memory) + Router-Kontext
+// ============================================================
+
 const userState = new Map();
 
 function getState(userId) {
@@ -8,7 +13,10 @@ function getState(userId) {
       onboarded: false,
       phase: null,
       session: null,
-      documentContext: null
+      documentContext: null,
+
+      // Router Chat Flow (Matrix)
+      router: null
     }
   );
 }

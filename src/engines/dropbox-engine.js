@@ -57,51 +57,36 @@ function parseMoneyToNumber(s) {
   if (!s) return null;
   const str = String(s).trim();
 
-  // Heuristik:
-  // - Wenn sowohl "." als auch "," vorkommen:
-  //   EU: "." = Tausender, "," = Dezimal
-  //   US: "," = Tausender, "." = Dezimal
   const hasDot = str.includes(".");
   const hasComma = str.includes(",");
 
   if (hasDot && hasComma) {
-    // Entscheide nach letztem Trenner:
     const lastDot = str.lastIndexOf(".");
     const lastComma = str.lastIndexOf(",");
 
     if (lastComma > lastDot) {
-      // EU-typisch: 2.578,00
       const normalized = str.replace(/\./g, "").replace(",", ".");
       return Number(normalized);
     } else {
-      // US-typisch: 2,578.00
       const normalized = str.replace(/,/g, "");
       return Number(normalized);
     }
   }
 
-  // Nur Komma: 2578,00
   if (hasComma && !hasDot) {
     return Number(str.replace(",", "."));
   }
 
-  // Nur Punkt: 2578.00
   if (hasDot && !hasComma) {
     return Number(str);
   }
 
-  // Keine Trenner: nicht als Geld werten
   return null;
 }
 
 /**
  * Korrigiert typische "Cents als Euro"-Fehler:
  * Beispiel: 257800 -> soll 2578,00 sein.
- *
- * Strategie:
- * 1) Wenn amount sehr groß ist (>= 100000), prüfe ob /100 oder /1000 plausibel ist.
- * 2) Verifiziere gegen Kandidaten aus rawText.
- * 3) Wenn rawText Kandidaten hat, nimm den "besten Match".
  */
 function sanitizeTotalAmount(amountNumber, rawText = "") {
   if (typeof amountNumber !== "number" || !isFinite(amountNumber) || amountNumber <= 0) {
@@ -110,23 +95,16 @@ function sanitizeTotalAmount(amountNumber, rawText = "") {
 
   const candidates = extractAmountCandidatesFromText(rawText);
 
-  // Wenn wir Kandidaten im Text haben: nutze sie als Ground Truth
   if (candidates.length > 0) {
-    // 1) direkter Match (innerhalb 1 Cent)
     const direct = candidates.find(v => Math.abs(v - amountNumber) <= 0.01);
     if (direct) return direct;
 
-    // 2) Skalierungs-Match (Cents/Euro-Shift)
-    // z.B. 257800 -> 2578.00 (divide by 100)
     const scaledOptions = [amountNumber / 100, amountNumber / 1000, amountNumber / 10000];
-
     for (const opt of scaledOptions) {
       const match = candidates.find(v => Math.abs(v - opt) <= 0.01);
       if (match) return match;
     }
 
-    // 3) Wenn nichts matched: nimm den Kandidaten, der "am ehesten" zu amountNumber passt,
-    // aber bevorzuge vernünftige Größenordnungen (<= 200000) — Behördenbeträge selten 7-stellig
     let best = candidates[0];
     let bestScore = Infinity;
 
@@ -138,19 +116,14 @@ function sanitizeTotalAmount(amountNumber, rawText = "") {
       }
     }
 
-    // Wenn amountNumber absurd groß ist, aber Text-Kandidaten deutlich kleiner sind,
-    // dann nehmen wir den Text-Kandidaten.
     if (amountNumber >= 100000 && best < amountNumber / 10) {
       return best;
     }
 
-    // ansonsten: beste Annäherung
     return best;
   }
 
-  // Ohne Kandidaten im Text: nur defensives Scaling bei "absurd groß"
   if (amountNumber >= 100000) {
-    // Sehr häufig: Centverschiebung
     const opt = amountNumber / 100;
     if (opt > 0 && opt < 100000) return opt;
   }
@@ -172,7 +145,8 @@ function buildStoragePath(date) {
    📄 DATEINAME
 ============================================================ */
 function buildFileName({ date, entity, amount }) {
-  return `${date}_${entity}_${amount}€`;
+  // ✅ FIX: Dateiname OHNE Betrag (Amount bleibt trotzdem berechnet für Facts/Notion)
+  return `${date}_${entity}`;
 }
 
 /* ============================================================
@@ -186,13 +160,16 @@ async function storeDocument(documentContext) {
     ? documentContext.facts
     : await extractDocumentFacts({ rawText });
 
-  const date =
-    facts?.dates?.documentDate ||
-    new Date().toISOString().slice(0, 10);
+  // ✅ FIX: Datum MUSS aus Facts kommen (ISO: YYYY-MM-DD)
+  const date = facts?.dates?.documentDate;
+
+  if (!date) {
+    throw new Error("Kein dokumentDate in Facts vorhanden – Speicherung abgebrochen (kein Fallback).");
+  }
 
   const entity = safeEntityName(facts?.creditor?.name || "Unbekannt");
 
-  // ✅ Betrag: Sanitizer gegen Komma/Punkt/Cents-Shift
+  // Betrag bleibt berechnet (für Logs/Notion), aber NICHT im Dateinamen
   let amountNumber = facts?.amounts?.total;
   if (typeof amountNumber === "number" && isFinite(amountNumber)) {
     amountNumber = sanitizeTotalAmount(amountNumber, rawText);

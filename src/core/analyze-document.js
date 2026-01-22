@@ -22,7 +22,6 @@ async function analyzeDocument({
   filePath
 } = {}) {
 
-  // OCR
   const ocrResult = await runOCR({
     buffer: fileBuffer,
     mimeType,
@@ -31,13 +30,10 @@ async function analyzeDocument({
 
   const rawText = ocrResult?.text || "";
 
-  // FACTS
+  // ✅ FACTS EINMAL HIER
   const facts = await extractDocumentFacts({ rawText });
 
-  // TYPE
   const typeResult = detectDocumentType(rawText);
-
-  // CATEGORY
   const baseCategoryResult = detectContentCategory(rawText, typeResult.type);
 
   let finalCategory = baseCategoryResult.category;
@@ -52,14 +48,12 @@ async function analyzeDocument({
     finalModule = selectModule({ category: finalCategory });
   }
 
-  // SCORE
   const scoreResult = scoreDocument({
     type: typeResult,
     category: { category: finalCategory }
   });
 
-  // 🔥 EINZIGER NOTION-WRITE
-  await createCoreDocument({
+  const core = await createCoreDocument({
     userId,
     facts,
     rawText
@@ -67,12 +61,13 @@ async function analyzeDocument({
 
   return {
     userId,
+    coreDocumentId: core?.id || null,
     type: typeResult,
     category: { category: finalCategory },
     score: scoreResult,
     module: finalModule,
     rawText,
-    facts
+    facts // ✅ WICHTIG
   };
 }
 
