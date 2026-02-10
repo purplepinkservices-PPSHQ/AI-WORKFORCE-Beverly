@@ -13,25 +13,35 @@ function normalize(text = "") {
     .trim();
 }
 
+// ------------------------------------------------------------
+// Händlerliste = starker Kassenbon-Indikator
+// ------------------------------------------------------------
+const RETAILERS = [
+  "aldi", "lidl", "rewe", "edeka", "penny", "netto", "kaufland", "norma",
+  "dm", "rossmann", "mueller",
+  "ikea", "media markt", "mediamarkt", "saturn", "decathlon",
+  "h&m", "zara", "primark",
+  "mcdonald", "burger king", "kfc", "subway",
+  "dominos", "pizza hut", "starbucks"
+];
+
 const CATALOG = {
   Rechnung: [
     ["rechnung", 5],
     ["rechnungsnr", 4],
     ["rechnungsnummer", 4],
     ["rechnungsdatum", 3],
-    ["gesamtbetrag", 4],
-    ["bruttobetrag", 3],
+    ["zahlungsziel", 3],
+    ["fällig", 3],
+    ["leistung", 3],
     ["nettobetrag", 3],
-    ["mwst", 3],
+    ["bruttobetrag", 3],
     ["umsatzsteuer", 3],
-    ["zahlungsziel", 2],
-    ["fällig", 2],
-    ["honorar", 2],
-    ["leistung", 2]
+    ["mwst", 2]
   ],
 
   Kassenbon: [
-    ["kassenbon", 5],
+    ["kassenbon", 6],
     ["bon", 4],
     ["kasse", 3],
     ["wechselgeld", 3],
@@ -39,139 +49,111 @@ const CATALOG = {
     ["ec", 2],
     ["kartenzahlung", 2],
     ["summe", 2],
-    ["mwst", 2],
-    ["aldi", 3], ["lidl", 3], ["rewe", 3], ["edeka", 3], ["penny", 3],
-    ["netto", 3], ["kaufland", 3], ["norma", 3],
-    ["dm", 3], ["rossmann", 3], ["mueller", 3],
-    ["mcdonald", 3], ["burger king", 3], ["kfc", 3], ["subway", 3],
-    ["dominos", 3], ["pizza hut", 3], ["starbucks", 3],
-    ["ikea", 3], ["media markt", 3], ["saturn", 3], ["decathlon", 3],
-    ["h&m", 3], ["zara", 3], ["primark", 3],
-    ["einkaufszentrum", 2], ["shopping center", 2], ["center", 1]
+    ["betrag", 2],
+    ["mwst", 1]
   ],
 
   Quittung: [
     ["quittung", 5],
     ["betrag erhalten", 4],
     ["zahlung erhalten", 4],
-    ["bezahlt", 3],
-    ["danke für ihren einkauf", 2]
+    ["bezahlt", 3]
   ],
 
   Vertrag: [
-    ["vertrag", 5],
+    ["vertrag", 6],
     ["vertragsnummer", 4],
-    ["vertragsbeginn", 3],
-    ["vertragsende", 3],
     ["laufzeit", 3],
     ["kündigung", 3],
-    ["kündigungsfrist", 3],
-    ["vereinbarung", 2],
-    ["bedingungen", 2]
+    ["vereinbarung", 2]
   ],
 
   Versicherung: [
-    ["versicherung", 5],
-    ["versicherungsnummer", 4],
+    ["versicherung", 6],
     ["police", 4],
     ["beitrag", 3],
-    ["jahresbeitrag", 3],
-    ["schaden", 3],
-    ["allianz", 4], ["huk", 4], ["ergo", 4], ["axa", 4], ["generali", 4],
-    ["r+v", 4], ["wwk", 4], ["signal iduna", 4], ["debeka", 4],
-    ["continentale", 4], ["barmenia", 4], ["devk", 4], ["inter", 4],
-    ["arag", 4], ["lv 1871", 4],
-    ["check24", 3], ["verivox", 3], ["clark", 3], ["getsafe", 3], ["wefox", 3],
-    ["versicherung ag", 2], ["versicherung a.g.", 2]
+    ["schaden", 3]
   ],
 
   Abrechnung: [
-    ["vergütungsabrechnung", 6],
-    ["abrechnung", 5],
-    ["courtage", 4],
+    ["abrechnung", 6],
     ["provision", 4],
-    ["gutschrift", 3],
-    ["belastung", 3],
-    ["jahressumme", 3],
-    ["produktionsübersicht", 3],
-    ["einzelvertragsnachweis", 3]
+    ["courtage", 4],
+    ["gutschrift", 3]
   ],
 
   Steuer: [
     ["finanzamt", 6],
-    ["steuer", 5],
+    ["steuerbescheid", 6],
     ["umsatzsteuer", 4],
-    ["einkommensteuer", 4],
-    ["steuerbescheid", 5],
-    ["steuererklärung", 4],
-    ["ust", 3],
-    ["vorsteuer", 3],
     ["elster", 3]
-  ],
-
-  Mahnung: [
-    ["mahnung", 6],
-    ["zahlungserinnerung", 5],
-    ["offener betrag", 4],
-    ["zahlungsfrist", 3],
-    ["letzte erinnerung", 4],
-    ["ratenzahlung", 3],
-    ["verzug", 3]
   ],
 
   Behoerde: [
     ["bescheid", 5],
     ["aktenzeichen", 4],
-    ["vorgangsnummer", 4],
-    ["gericht", 5],
-    ["staatsanwaltschaft", 6],
-    ["polizei", 6],
-    ["bundesamt", 6],
-    ["landesamt", 6],
-    ["kreisverwaltungsreferat", 6],
+    ["gericht", 6],
     ["jobcenter", 6],
-    ["arbeitsagentur", 6],
-    ["finanzkasse", 6],
-    ["landesjustizkasse", 6],
-    ["einwohnermeldeamt", 6],
-    ["bürgeramt", 6],
-    ["rathaus", 5],
-    ["stadtverwaltung", 5],
-    ["ministerium", 6]
+    ["arbeitsagentur", 6]
   ],
 
   Bank: [
-    ["kontoauszug", 5],
+    ["kontoauszug", 6],
     ["iban", 3],
-    ["bic", 3],
     ["überweisung", 3],
-    ["lastschrift", 3],
-    ["bankverbindung", 3],
-    ["deutsche bank", 4], ["commerzbank", 4], ["hypovereinsbank", 4],
-    ["postbank", 4],
-    ["sparkasse", 4], ["volksbank", 4], ["raiffeisenbank", 4],
-    ["spardabank", 4], ["landesbank", 4],
-    ["ing", 4], ["dkb", 4], ["n26", 4], ["comdirect", 4],
-    ["consorsbank", 4], ["targobank", 4]
+    ["lastschrift", 3]
   ]
 };
 
+// ------------------------------------------------------------
+// Hauptlogik
+// ------------------------------------------------------------
 function detectDocumentType(rawText = "") {
   const text = normalize(rawText);
   const scores = {};
 
   for (const [type, markers] of Object.entries(CATALOG)) {
     let score = 0;
+    let formalHits = 0;
+
     for (const [keyword, weight] of markers) {
-      if (text.includes(keyword)) score += weight;
+      if (text.includes(keyword)) {
+        score += weight;
+        if (["rechnungsnr", "rechnungsnummer", "zahlungsziel", "leistung"].includes(keyword)) {
+          formalHits++;
+        }
+      }
     }
+
+    // 🔒 Fix B: Rechnung nur mit Struktur voll gültig
+    if (type === "Rechnung" && formalHits < 2) {
+      score *= 0.5;
+    }
+
     scores[type] = score;
+  }
+
+  // 🔒 Fix A: Händler → Kassenbon-Boost
+  if (RETAILERS.some(r => text.includes(r))) {
+    scores.Kassenbon = (scores.Kassenbon || 0) + 5;
   }
 
   const bestScore = Math.max(...Object.values(scores));
   const topTypes = Object.entries(scores)
     .filter(([_, s]) => s === bestScore && s > 0)
     .map(([t]) => t);
+
+  // 🔒 Fix C: Kassenbon früher sicher
+  if (topTypes.length === 1 && topTypes[0] === "Kassenbon" && bestScore >= 6) {
+    return {
+      type: "Kassenbon",
+      confidence: 0.9,
+      score: bestScore,
+      scores,
+      needsUserConfirmation: false,
+      source: "RetailerBoost"
+    };
+  }
 
   if (bestScore < 5) {
     return {
@@ -196,7 +178,7 @@ function detectDocumentType(rawText = "") {
     };
   }
 
-  const confidence = Math.min(0.95, Math.max(0.6, bestScore / 20));
+  const confidence = Math.min(0.95, Math.max(0.65, bestScore / 18));
 
   return {
     type: topTypes[0],

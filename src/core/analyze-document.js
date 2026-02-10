@@ -2,45 +2,77 @@
 
 // ============================================================
 // Datei: src/core/analyze-document.js
-// Zweck: Analyse + zentraler Persistenzpunkt (Core DB)
 // ============================================================
 
-const { runOCR } = require("../utils/ocr");
+const { extractFactsFromVision } = require("./vision-facts-extractor");
+const { sanitizeRawTextForDates } = require("../engines/raw-text-sanitizer");
+
+const { detectDocumentDate } = require("../engines/date-engine");
+const { detectCreditor } = require("../engines/creditor-engine");
+const { detectAmount } = require("../engines/amount-engine");
 const { detectDocumentType } = require("../engines/document-type-engine");
-const { scoreDocument } = require("../engines/document-score-engine");
+
 const { detectContentCategory } = require("../engines/content-category-engine");
 const { detectFinanceCategory } = require("../engines/finance-category-engine");
+
+const { scoreDocument } = require("../engines/document-score-engine");
 const { selectModule } = require("../engines/module-selector");
 
-const { extractDocumentFacts } = require("./document-facts-engine");
-const { createCoreDocument } = require("../integrations/notion/notion-core-documents");
+const {
+  createCoreDocument
+} = require("../integrations/notion/notion-core-documents");
 
-async function analyzeDocument({
-  userId,
-  fileBuffer,
-  mimeType,
-  filePath
-} = {}) {
+// ------------------------------------------------------------
+// ISO-Normalisierung
+// ------------------------------------------------------------
+function toISODate(dateObj) {
+  if (!(dateObj instanceof Date)) return null;
 
-  const ocrResult = await runOCR({
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+async function analyzeDocument({ userId, fileBuffer, mimeType } = {}) {
+  // ==========================================================
+  // 1️⃣ VISION
+  // ==========================================================
+  const visionResult = await extractFactsFromVision({
     buffer: fileBuffer,
-    mimeType,
-    filePath
+    mimeType
   });
 
-  const rawText = ocrResult?.text || "";
+  const rawText = visionResult.rawText || "";
 
-  // ✅ FACTS EINMAL HIER
-  const facts = await extractDocumentFacts({ rawText });
+  // ==========================================================
+  // 2️⃣ SANITIZER
+  // ==========================================================
+  const sanitizedText = sanitizeRawTextForDates(rawText);
 
-  const typeResult = detectDocumentType(rawText);
-  const baseCategoryResult = detectContentCategory(rawText, typeResult.type);
+  // ==========================================================
+  // 3️⃣ ENGINES
+  // ==========================================================
+  const dateResult = detectDocumentDate(sanitizedText);
+  const isoDate = toISODate(dateResult?.date);
 
-  let finalCategory = baseCategoryResult.category;
+  const creditorResult = detectCreditor(sanitizedText);
+  const amountResult = detectAmount(sanitizedText);
+  const documentTypeResult = detectDocumentType(sanitizedText);
+
+  const baseCategoryResult = detectContentCategory(sanitizedText);
+
+  const categoryResult = {
+    category: baseCategoryResult?.category || "unknown",
+    confidence: baseCategoryResult?.confidence ?? 0.6
+  };
+
+  let finalCategory = categoryResult.category;
   let finalModule = null;
 
-  if (baseCategoryResult.category === "finance") {
-    finalCategory = detectFinanceCategory(rawText);
+  if (finalCategory === "finance") {
+    finalCategory = detectFinanceCategory(sanitizedText);
     finalModule = "finance-module";
   }
 
@@ -48,26 +80,49 @@ async function analyzeDocument({
     finalModule = selectModule({ category: finalCategory });
   }
 
+  // ==========================================================
+  // 4️⃣ SCORE
+  // ==========================================================
   const scoreResult = scoreDocument({
-    type: typeResult,
-    category: { category: finalCategory }
+    type: documentTypeResult,
+    category: categoryResult
   });
 
+  // ==========================================================
+  // 5️⃣ NOTION WRITE
+  // ==========================================================
   const core = await createCoreDocument({
     userId,
-    facts,
-    rawText
+    rawText,
+    sanitizedText,
+    date: isoDate,
+    creditor: creditorResult?.creditor || "Unbekannt",
+    category: finalCategory,
+    documentType: documentTypeResult?.type || "Dokument",
+
+    // 🔒 Notion-Logik:
+    // Betrag = Brutto
+    // Steuer optional
+    gross: amountResult?.gross ?? null,
+    tax: amountResult?.tax ?? null
   });
 
   return {
     userId,
-    coreDocumentId: core?.id || null,
-    type: typeResult,
-    category: { category: finalCategory },
-    score: scoreResult,
-    module: finalModule,
     rawText,
-    facts // ✅ WICHTIG
+    sanitizedText,
+    creditor: creditorResult,
+    amount: amountResult,
+    documentType: documentTypeResult,
+    coreDocumentId: core?.id || null,
+    category: { category: finalCategory },
+    module: finalModule,
+    score: scoreResult,
+    date: {
+      date: isoDate,
+      confidence: dateResult?.confidence || 0,
+      source: dateResult?.source || "Unknown"
+    }
   };
 }
 

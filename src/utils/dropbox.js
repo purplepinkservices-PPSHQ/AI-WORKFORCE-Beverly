@@ -1,57 +1,77 @@
 "use strict";
 
+// ============================================================
+// Datei: src/utils/dropbox.js
+// Version: v1.2.4 – KEEP ORIGINAL EXTENSION
+// ============================================================
+
 const { Dropbox } = require("dropbox");
 const fetch = require("node-fetch");
+
+if (!process.env.DROPBOX_ACCESS_TOKEN) {
+  throw new Error("DROPBOX_ACCESS_TOKEN fehlt in .env");
+}
 
 const dbx = new Dropbox({
   accessToken: process.env.DROPBOX_ACCESS_TOKEN,
   fetch
 });
 
-// ===============================
-// 🔧 SAFE NORMALIZER
-// ===============================
-function normalizeDropboxPath(p) {
-  // 🔴 FIX: Typ absichern
-  if (typeof p !== "string" || !p.trim()) {
-    return "/Unklar";
+// ------------------------------------------------------------
+// HELPERS
+// ------------------------------------------------------------
+
+function sanitizeSegment(segment = "") {
+  let s = String(segment)
+    .trim()
+    .replace(/[\\:*?"<>|]/g, "_")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "");
+
+  if (!s || s === "." || s === "..") {
+    return "Dokument";
   }
 
-  let pathStr = p.trim();
-
-  if (!pathStr.startsWith("/")) {
-    pathStr = "/" + pathStr;
-  }
-
-  // doppelte Slashes vermeiden
-  pathStr = pathStr.replace(/\/+/g, "/");
-
-  return pathStr;
+  return s;
 }
 
-// ===============================
-// 📤 UPLOAD
-// ===============================
-async function uploadToDropbox({ buffer, fileName, folderPath }) {
-  if (!buffer || !Buffer.isBuffer(buffer)) {
-    throw new Error("uploadToDropbox: buffer fehlt oder ungültig");
+function sanitizeFolderPath(folderPath = "") {
+  const parts = String(folderPath)
+    .split("/")
+    .filter(Boolean)
+    .map(sanitizeSegment)
+    .filter(Boolean);
+
+  return "/" + parts.join("/");
+}
+
+function buildDropboxPath(folderPath, fileName) {
+  const folder = sanitizeFolderPath(folderPath);
+  const file = sanitizeSegment(fileName || "Dokument");
+  const fullPath = `${folder}/${file}`.replace(/\/+/g, "/");
+  return fullPath.startsWith("/") ? fullPath : "/" + fullPath;
+}
+
+// ------------------------------------------------------------
+// UPLOAD
+// ------------------------------------------------------------
+
+async function uploadToDropbox({ buffer, folderPath, fileName }) {
+  if (!buffer) {
+    throw new Error("uploadToDropbox: buffer fehlt");
   }
 
-  const safeFolder = normalizeDropboxPath(folderPath);
-  const safeName =
-    typeof fileName === "string" && fileName.trim()
-      ? fileName.trim()
-      : "Unbekannt.pdf";
-
-  const fullPath = `${safeFolder}/${safeName}`;
+  const path = buildDropboxPath(folderPath, fileName);
 
   await dbx.filesUpload({
-    path: fullPath,
+    path,
     contents: buffer,
-    mode: { ".tag": "overwrite" }
+    mode: { ".tag": "add" },
+    autorename: true,
+    mute: false
   });
 
-  console.log("[Dropbox] Upload:", fullPath);
+  return path;
 }
 
 module.exports = {

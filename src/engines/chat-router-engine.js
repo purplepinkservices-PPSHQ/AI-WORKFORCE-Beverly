@@ -2,11 +2,10 @@
 
 // ============================================================
 // Datei: src/engines/chat-router-engine.js
-// Zweck: Lern- & Rückfrage-Router (unterbricht Flow, kehrt zurück)
+// Zweck: Lern- & Rückfrage-Router (Vision-first, kein OCR)
 // ============================================================
 
 const { getState, setState } = require("../system/state");
-
 const { lookupEntityByCreditor } = require("./entity-lookup-engine");
 
 const {
@@ -19,13 +18,13 @@ const {
 } = require("../integrations/notion/notion-core-documents-update");
 
 const SCORE_THRESHOLD = 70;
+const DATE_CONFIDENCE_MIN = 0.4;
 
 // ------------------------------------------------------------
 // Router-Stages
 // ------------------------------------------------------------
 const ROUTER_STAGE = {
   ASK_ENTITY_TYPE: "ASK_ENTITY_TYPE",
-  ASK_OTHER_CONTEXT: "ASK_OTHER_CONTEXT",
   ASK_ROLE_USAGE: "ASK_ROLE_USAGE",
   ASK_DATE: "ASK_DATE"
 };
@@ -69,12 +68,12 @@ function mapEntityChoice(choice) {
 
 function mapRoleChoice(choice) {
   return {
-    "1": ["Ausgabe"],
-    "2": ["Einkommen"],
+    "1": ["Ausgaben"],
+    "2": ["Einnahmen"],
     "3": ["Steuer"],
-    "4": ["Rechtlich"],
+    "4": ["Rechtliches"],
     "5": ["Gesundheit"],
-    "6": []
+    "6": ["Unbekannt"]
   }[choice] ?? null;
 }
 
@@ -98,7 +97,7 @@ function askRoleText() {
 
 function askDateText() {
   return [
-    "Ich konnte auf dem Beleg kein sicheres Datum erkennen 👀",
+    "Ich bin mir beim Datum noch nicht sicher 👀",
     "Magst du mir kurz das Datum schreiben?"
   ].join("\n");
 }
@@ -106,14 +105,43 @@ function askDateText() {
 // ============================================================
 // START ROUTER
 // ============================================================
-async function startRouterIfNeeded({ userId, analysis }) {
-  const creditorName = analysis?.facts?.creditor?.name || "Unbekannt";
+async function startChatRouterIfNeeded({ userId, analysis }) {
+
+  // ----------------------------------------------------------
+  // FIX 1: Creditor korrekt aus analyzeDocument()
+  // ----------------------------------------------------------
+  const creditorName =
+    analysis?.creditor?.creditor ||
+    analysis?.creditor?.name ||
+    "Unbekannt";
+
+  // ----------------------------------------------------------
+  // Datumssicherheit
+  // ----------------------------------------------------------
+  const dateValue = analysis?.date?.date || null;
+  const dateConfidence = analysis?.date?.confidence || 0;
+
+  const hasReliableDate =
+    Boolean(dateValue) && dateConfidence >= DATE_CONFIDENCE_MIN;
+
+  // ----------------------------------------------------------
+  // FIX 2: HARD EXIT bei klarem AUSGABEN-Beleg
+  // ----------------------------------------------------------
+  if (
+    analysis?.category?.category === "ausgaben" &&
+    creditorName !== "Unbekannt" &&
+    hasReliableDate
+  ) {
+    return { started: false };
+  }
+
+  // ----------------------------------------------------------
+  // Entity Lookup
+  // ----------------------------------------------------------
   const entity = await lookupEntityByCreditor({ creditorName });
 
-  // 🔧 FIX: Datum bereits im Core vorhanden?
-  const hasDocumentDate = Boolean(analysis?.facts?.dates?.documentDate);
-
   let stage = ROUTER_STAGE.ASK_ENTITY_TYPE;
+
   if (entity?.confidence === "Hoch") {
     stage = ROUTER_STAGE.ASK_ROLE_USAGE;
   }
@@ -124,7 +152,7 @@ async function startRouterIfNeeded({ userId, analysis }) {
     coreDocId: analysis?.coreDocumentId || null,
     finalScore: analysis?.score?.score || 0,
     entityType: entity?.entityType || null,
-    hasDocumentDate
+    hasReliableDate
   };
 
   setState(userId, { chatRouter: routerState });
@@ -142,24 +170,18 @@ async function startRouterIfNeeded({ userId, analysis }) {
 // ============================================================
 // HANDLE ROUTER ANSWERS
 // ============================================================
-async function handleRouterReply({ userId, messageText }) {
+async function handleChatRouterReply({ userId, messageText }) {
   const state = getState(userId);
   const ctx = state.chatRouter;
 
-  if (!ctx || !ctx.stage) {
-    return { handled: false };
-  }
+  if (!ctx || !ctx.stage) return { handled: false };
 
   const text = String(messageText || "").trim();
 
   // ----------------------------------------------------------
   if (ctx.stage === ROUTER_STAGE.ASK_ENTITY_TYPE) {
-    const choice = onlyDigit(text);
-    const mapped = mapEntityChoice(choice);
-
-    if (!mapped) {
-      return { handled: true, replyText: MENU_ENTITY };
-    }
+    const mapped = mapEntityChoice(onlyDigit(text));
+    if (!mapped) return { handled: true, replyText: MENU_ENTITY };
 
     ctx.entityType = mapped;
 
@@ -178,12 +200,8 @@ async function handleRouterReply({ userId, messageText }) {
 
   // ----------------------------------------------------------
   if (ctx.stage === ROUTER_STAGE.ASK_ROLE_USAGE) {
-    const choice = onlyDigit(text);
-    const roles = mapRoleChoice(choice);
-
-    if (roles === null) {
-      return { handled: true, replyText: MENU_ROLE };
-    }
+    const roles = mapRoleChoice(onlyDigit(text));
+    if (!roles) return { handled: true, replyText: MENU_ROLE };
 
     await upsertEntityFromUserAnswer({
       name: ctx.creditorName,
@@ -197,19 +215,19 @@ async function handleRouterReply({ userId, messageText }) {
       await updateCoreDocumentProperties({
         pageId: ctx.coreDocId,
         properties: {
-          Kategorie: { multi_select: roles.map(r => ({ name: r })) }
+          Kategorie: {
+            multi_select: roles.map(r => ({ name: r }))
+          }
         }
       });
     }
 
-    // 🔧 FIX: Nur nach Datum fragen, wenn Core KEINS hat
-    if (!ctx.hasDocumentDate) {
+    if (!ctx.hasReliableDate) {
       ctx.stage = ROUTER_STAGE.ASK_DATE;
       setState(userId, { chatRouter: ctx });
       return { handled: true, replyText: askDateText() };
     }
 
-    // ✅ Datum ist vorhanden → Router direkt beenden
     await touchEntityLastUsed({ name: ctx.creditorName });
     setState(userId, { chatRouter: null });
 
@@ -223,7 +241,6 @@ async function handleRouterReply({ userId, messageText }) {
   // ----------------------------------------------------------
   if (ctx.stage === ROUTER_STAGE.ASK_DATE) {
     await touchEntityLastUsed({ name: ctx.creditorName });
-
     setState(userId, { chatRouter: null });
 
     return {
@@ -237,6 +254,6 @@ async function handleRouterReply({ userId, messageText }) {
 }
 
 module.exports = {
-  startChatRouterIfNeeded: startRouterIfNeeded,
-  handleChatRouterReply: handleRouterReply
+  startChatRouterIfNeeded,
+  handleChatRouterReply
 };

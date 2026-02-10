@@ -2,25 +2,23 @@
 
 // ============================================================
 // Datei: src/system/router.js
+// Zweck:
+// - Zentrale DM-Routing-Logik
+// - KEIN Chat-Router
+// - Dokumente werden nach Analyse DIREKT gespeichert
+// - Voraussetzung: analyzeDocument liefert ISO-Datum (YYYY-MM-DD)
 // ============================================================
 
 const { getState, setState } = require("./state");
 const { resolvePlan } = require("./plan-resolver");
 const { runOnboarding } = require("./onboarding-engine");
+
 const { analyzeDocument } = require("../core/analyze-document");
-const { renderMenu } = require("../ui/menu-renderer");
 const { storeDocument } = require("../engines/dropbox-engine");
+
+const { renderMenu } = require("../ui/menu-renderer");
 const { writeAuditLog } = require("./audit-log");
 const { handleAuditChatCommand } = require("./audit-chat");
-const { getDomainSwitchMenu } = require("./domain-switch");
-
-// ------------------------------------------------------------
-// Chat-Router (Decision-Matrix Vorspann)
-// ------------------------------------------------------------
-const {
-  startChatRouterIfNeeded,
-  handleChatRouterReply
-} = require("../engines/chat-router-engine");
 
 // Module
 const { getModuleReaction: financeModule } =
@@ -40,73 +38,11 @@ async function routeDM(message) {
   const hasAttachment = message.attachments?.size > 0;
   const state = getState(userId);
 
+  // ============================================================
+  // Audit / System-Kommandos
+  // ============================================================
   const auditHandled = await handleAuditChatCommand(message);
   if (auditHandled) return;
-
-  // ============================================================
-  // 🔧 FIX: Chat-Router → resumeFlow MUSS speichern + Menü zeigen
-  // ============================================================
-  if (state?.chatRouter) {
-    const result = await handleChatRouterReply({
-      userId,
-      messageText: text
-    });
-
-    // Router läuft weiter
-    if (result?.handled && !result?.resumeFlow) {
-      if (result.replyText) await message.reply(result.replyText);
-      return;
-    }
-
-    // ✅ Router fertig → JETZT speichern + Abschluss-Menü
-    if (result?.handled && result?.resumeFlow) {
-      if (result.replyText) await message.reply(result.replyText);
-
-      const ctx = state.documentContext;
-
-      if (!ctx) {
-        setState(userId, { chatRouter: null });
-        return;
-      }
-
-      const storageResult = await storeDocument(ctx);
-
-      await writeAuditLog({
-        timestamp: new Date().toISOString(),
-        phase: "PHASE_4",
-        result: "STORED",
-        storagePath: storageResult.storagePath
-      });
-
-      const closingMenu = {
-        text:
-          "✅ Dokument gespeichert\n\n" +
-          `📂 Ablage: ${storageResult.storagePath}\n` +
-          `📄 Name: ${storageResult.fileName}\n\n` +
-          "Menü:\n" +
-          "1️⃣ Finanzen\n" +
-          "2️⃣ Rechtliche Prüfung\n" +
-          "3️⃣ Gesundheit\n\n" +
-          "⬇️ Du kannst jetzt direkt das nächste Dokument hochladen 😊",
-        actions: [
-          { id: "MENU_FINANCE", label: "Finanzen" },
-          { id: "MENU_LEGAL", label: "Recht" },
-          { id: "MENU_HEALTH", label: "Gesundheit" }
-        ]
-      };
-
-      await message.reply(closingMenu.text);
-
-      setState(userId, {
-        phase: "IDLE",
-        awaitingAction: { actions: closingMenu.actions },
-        documentContext: null,
-        chatRouter: null
-      });
-
-      return; // ⛔ WICHTIG: KEIN FALLBACK MEHR
-    }
-  }
 
   // ============================================================
   // 🟢 IDLE → Abschluss-Menü Auswahl
@@ -139,6 +75,7 @@ async function routeDM(message) {
     }
 
     const menu = renderMenu(reaction);
+
     setState(userId, {
       phase: "PHASE_3",
       awaitingAction: { actions: reaction.actions },
@@ -150,7 +87,7 @@ async function routeDM(message) {
   }
 
   // ============================================================
-  // DOKUMENT HOCHGELADEN
+  // 📄 DOKUMENT HOCHGELADEN
   // ============================================================
   if (hasAttachment) {
     if (!state.onboarded) setState(userId, { onboarded: true });
@@ -162,6 +99,9 @@ async function routeDM(message) {
       await fetch(attachment.url).then(res => res.arrayBuffer())
     );
 
+    // ============================================================
+    // Analyse (liefert ISO-Datum!)
+    // ============================================================
     const analysis = await analyzeDocument({
       userId,
       fileBuffer: buffer
@@ -170,30 +110,26 @@ async function routeDM(message) {
     const documentContext = {
       userId,
       buffer,
-      facts: analysis.facts,
-      rawText: analysis.rawText
+      rawText: analysis?.rawText || "",
+      date: analysis?.date?.date || null, // ⬅️ ISO YYYY-MM-DD
+      facts: {
+        creditor: {
+          name: analysis?.creditor?.creditor || "Unbekannt"
+        }
+      }
     };
 
-    const routerDecision = await startChatRouterIfNeeded({
-      userId,
-      analysis,
-      documentContext
-    });
-
-    if (routerDecision?.started) {
-      setState(userId, {
-        chatRouter: routerDecision.state,
-        documentContext
-      });
-
-      if (routerDecision.replyText) {
-        await message.reply(routerDecision.replyText);
-      }
-      return;
-    }
-
-    // Kein Router → direkt speichern
+    // ============================================================
+    // DIREKT SPEICHERN – kein Chat-Router
+    // ============================================================
     const storageResult = await storeDocument(documentContext);
+
+    await writeAuditLog({
+      timestamp: new Date().toISOString(),
+      phase: "PHASE_4",
+      result: "STORED",
+      storagePath: storageResult.storagePath
+    });
 
     const closingMenu = {
       text:
@@ -217,15 +153,14 @@ async function routeDM(message) {
     setState(userId, {
       phase: "IDLE",
       awaitingAction: { actions: closingMenu.actions },
-      documentContext: null,
-      chatRouter: null
+      documentContext: null
     });
 
     return;
   }
 
   // ============================================================
-  // FALLBACK
+  // FALLBACK / ONBOARDING
   // ============================================================
   if (!state.onboarded) {
     const handled = await runOnboarding(message);

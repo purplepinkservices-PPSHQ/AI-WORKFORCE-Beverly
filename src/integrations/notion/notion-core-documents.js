@@ -9,82 +9,99 @@ const { notion } = require("./notion-client");
 
 const CORE_DOCUMENTS_DB_ID = process.env.NOTION_DB_DOCUMENTS_CORE;
 
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+function limitText(text, max = 2000) {
+  if (!text) return "";
+  return String(text).slice(0, max);
+}
+
+function toNumber(v) {
+  return typeof v === "number" && Number.isFinite(v)
+    ? Math.round(v * 100) / 100
+    : null;
+}
+
 async function createCoreDocument({
   userId,
-  facts,
-  rawText
+  rawText,
+  sanitizedText,
+  date,
+  creditor,
+  category,
+  documentType,
+  gross,
+  tax
 }) {
   if (!CORE_DOCUMENTS_DB_ID) {
     throw new Error("NOTION_DB_DOCUMENTS_CORE fehlt");
   }
 
-  const amount =
-    typeof facts?.amounts?.total === "number"
-      ? Math.abs(facts.amounts.total)
-      : null;
+  const grossVal = toNumber(gross);
+  const taxVal = toNumber(tax);
 
   const titleText =
-    facts?.creditor?.name && amount !== null
-      ? `${facts.creditor.name} ${amount.toFixed(2)}€`
-      : "Dokument";
-
-  const categoryValue = facts?.creditor?.category || "Sonstiges";
+    creditor && grossVal !== null
+      ? `${creditor} ${grossVal.toFixed(2)}€`
+      : creditor || "Dokument";
 
   const properties = {
-    // -------------------------
-    // Name (Title)
-    // -------------------------
     Name: {
-      title: [
+      title: [{ text: { content: titleText } }]
+    },
+
+    Datum: date
+      ? { date: { start: date } }
+      : undefined,
+
+    // 🔒 Betrag = Brutto (einzige Geldbasis)
+    Betrag: grossVal !== null
+      ? { number: grossVal }
+      : undefined,
+
+    Steuer: taxVal !== null
+      ? { number: taxVal }
+      : undefined,
+
+    Gläubiger: creditor
+      ? { rich_text: [{ text: { content: creditor } }] }
+      : undefined,
+
+    Kategorie: category
+      ? {
+          multi_select: Array.isArray(category)
+            ? category.map(c => ({ name: c }))
+            : [{ name: category }]
+        }
+      : undefined,
+
+    Dokumenttyp: documentType
+      ? { select: { name: documentType } }
+      : undefined,
+
+    "Dokument Inhalt": {
+      rich_text: [
         {
-          text: { content: titleText }
+          text: {
+            content: limitText(rawText)
+          }
         }
       ]
     },
 
-    // -------------------------
-    // Datum
-    // -------------------------
-    Datum: facts?.dates?.documentDate
-      ? { date: { start: facts.dates.documentDate } }
-      : undefined,
-
-    // -------------------------
-    // Betrag
-    // -------------------------
-    Betrag: amount !== null
-      ? { number: amount }
-      : undefined,
-
-    // -------------------------
-    // Gläubiger
-    // -------------------------
-    Gläubiger: facts?.creditor?.name
-      ? {
-          rich_text: [
-            { text: { content: facts.creditor.name } }
-          ]
+    "Sanitized Text": {
+      rich_text: [
+        {
+          text: {
+            content: limitText(sanitizedText)
+          }
         }
-      : undefined,
-
-    // -------------------------
-    // Kategorie (MULTI_SELECT ❗)
-    // -------------------------
-    Kategorie: {
-      multi_select: Array.isArray(categoryValue)
-        ? categoryValue.map(c => ({ name: c }))
-        : [{ name: categoryValue }]
-    },
-
-    // -------------------------
-    // Dokumenttyp (SELECT)
-    // -------------------------
-    Dokumenttyp: facts?.documentType
-      ? { select: { name: facts.documentType } }
-      : undefined
+      ]
+    }
   };
 
-  // ❌ Notion hasst undefined → raus damit
+  // undefined sauber entfernen
   Object.keys(properties).forEach(
     key => properties[key] === undefined && delete properties[key]
   );
@@ -94,11 +111,7 @@ async function createCoreDocument({
     properties
   });
 
-  return {
-    id: result.id
-  };
+  return { id: result.id };
 }
 
-module.exports = {
-  createCoreDocument
-};
+module.exports = { createCoreDocument };

@@ -4,6 +4,14 @@
 // Content Category Engine
 // Phase 2 – Inhaltliche Einordnung
 // ARCHITEKTUR v0.5 KONFORM
+//
+// CORE-KATEGORIEN (FINAL):
+// - Einnahmen
+// - Ausgaben
+// - Rechtliches
+// - Gesundheit
+// - Privat
+// - Unbekannt
 // ============================================================
 
 function normalize(text = "") {
@@ -15,10 +23,10 @@ function normalize(text = "") {
 }
 
 // ------------------------------------------------------------
-// Kategorien (Keywords)
+// Keyword-Gruppen (nur Heuristik, kein Output!)
 // ------------------------------------------------------------
-const CATEGORIES = {
-  recht: [
+const KEYWORDS = {
+  rechtliches: [
     "notar",
     "kostenrechnung",
     "gnotkg",
@@ -31,55 +39,8 @@ const CATEGORIES = {
     "zahlungserinnerung",
     "verfahren",
     "urkunde",
-    "beglaubigung"
-  ],
-
-  versicherung: [
-    "versicherung",
-    "police",
-    "versicherungsnummer",
-    "beitrag",
-    "prämie",
-    "praemie",
-    "kaution",
-    "r+v",
-    "allgemeine versicherung",
-    "leistungsabrechnung",
-    "schaden"
-  ],
-
-  steuer: [
-    "finanzamt",
-    "steuerbescheid",
-    "einkommensteuer",
-    "umsatzsteuer",
-    "vorsteuer",
-    "elster",
-    "steuererklärung",
-    "rechnung",
-    "netto",
-    "brutto",
-    "ust"
-  ],
-
-  wohnen: [
-    "miete",
-    "mietvertrag",
-    "nebenkostenabrechnung",
-    "wohnfläche",
-    "kaltmiete",
-    "warmmiete",
-    "vermieter",
-    "hausverwaltung"
-  ],
-
-  arbeit: [
-    "abrechnung",
-    "gehalt",
-    "lohn",
-    "arbeitgeber",
-    "provision",
-    "courtage"
+    "beglaubigung",
+    "bescheid"
   ],
 
   gesundheit: [
@@ -92,104 +53,102 @@ const CATEGORIES = {
     "therapie",
     "praxis",
     "honorar",
-    "rezept"
+    "rezept",
+    "apotheke"
   ],
 
-  haushalt: [
+  einnahmen: [
+    "gehalt",
+    "lohn",
+    "abrechnung",
+    "arbeitgeber",
+    "provision",
+    "courtage",
+    "honorarzahlung",
+    "verdienst",
+    "einnahme"
+  ],
+
+  ausgaben: [
     "kassenbon",
+    "kundenbeleg",
     "supermarkt",
-    "lebensmittel",
+    "aldi",
+    "lidl",
+    "rewe",
+    "edeka",
     "einkauf",
+    "lebensmittel",
+    "betrag",
+    "eur",
+    "visa",
+    "mastercard",
+    "zahlung",
+    "bezahlt",
     "strom",
     "wasser",
-    "haushalt"
+    "internet",
+    "telefon"
+  ],
+
+  privat: [
+    "notiz",
+    "termin",
+    "kalender",
+    "erinnerung",
+    "meeting",
+    "treffen"
   ]
 };
 
 // ------------------------------------------------------------
-// Hauptlogik (PRIORITÄTSBASIERT)
+// Hauptlogik (PRIORITÄTSBASIERT – CORE)
 // ------------------------------------------------------------
 function detectContentCategory(rawText = "", documentType = null) {
   const text = normalize(rawText);
 
   // =========================================================
-  // 1️⃣ RECHT – höchste Priorität
+  // 1️⃣ RECHTLICHES (höchste Priorität)
   // =========================================================
-  const legalHits = CATEGORIES.recht.filter((k) => text.includes(k)).length;
-  if (legalHits > 0) {
-    return {
-      category: "recht",
-      confidence: Math.min(0.95, 0.6 + legalHits * 0.1)
-    };
+  if (KEYWORDS.rechtliches.some(k => text.includes(k))) {
+    return { category: "Rechtliches", confidence: 0.9 };
   }
 
   // =========================================================
-  // 2️⃣ VERSICHERUNG
+  // 2️⃣ GESUNDHEIT
   // =========================================================
-  const insuranceHits = CATEGORIES.versicherung.filter((k) =>
-    text.includes(k)
-  ).length;
-  if (insuranceHits > 0) {
-    return {
-      category: "versicherung",
-      confidence: Math.min(0.95, 0.6 + insuranceHits * 0.1)
-    };
+  if (KEYWORDS.gesundheit.some(k => text.includes(k))) {
+    return { category: "Gesundheit", confidence: 0.9 };
   }
 
   // =========================================================
-  // 3️⃣ STEUER
+  // 3️⃣ EINNAHMEN
   // =========================================================
-  const taxHits = CATEGORIES.steuer.filter((k) => text.includes(k)).length;
-  if (taxHits > 0) {
-    return {
-      category: "steuer",
-      confidence: Math.min(0.9, 0.55 + taxHits * 0.1)
-    };
+  if (KEYWORDS.einnahmen.some(k => text.includes(k))) {
+    return { category: "Einnahmen", confidence: 0.85 };
   }
 
   // =========================================================
-  // 4️⃣ WOHNEN
+  // 4️⃣ AUSGABEN (STANDARD FÜR BELEGE)
   // =========================================================
-  const housingHits = CATEGORIES.wohnen.filter((k) =>
-    text.includes(k)
-  ).length;
-  if (housingHits > 0) {
-    return {
-      category: "wohnen",
-      confidence: Math.min(0.9, 0.55 + housingHits * 0.1)
-    };
-  }
-
-  // =========================================================
-  // 5️⃣ ARBEIT / EINKOMMEN
-  // =========================================================
-  const workHits = CATEGORIES.arbeit.filter((k) => text.includes(k)).length;
-  if (workHits > 0) {
-    return {
-      category: "arbeit",
-      confidence: Math.min(0.9, 0.55 + workHits * 0.1)
-    };
-  }
-
-  // =========================================================
-  // 6️⃣ HAUSHALT – NUR ALS FALLBACK
-  // =========================================================
-  const householdHits = CATEGORIES.haushalt.filter((k) =>
-    text.includes(k)
-  ).length;
-
   if (
-    householdHits > 0 ||
-    (documentType &&
-      String(documentType).toLowerCase().includes("kassenbon"))
+    KEYWORDS.ausgaben.some(k => text.includes(k)) ||
+    (documentType && String(documentType).toLowerCase().includes("kassen"))
   ) {
-    return { category: "haushalt", confidence: 0.8 };
+    return { category: "Ausgaben", confidence: 0.85 };
   }
 
   // =========================================================
-  // UNKLAR
+  // 5️⃣ PRIVAT (Notizen / Termine)
   // =========================================================
-  return { category: "unklar", confidence: 0.3 };
+  if (KEYWORDS.privat.some(k => text.includes(k))) {
+    return { category: "Privat", confidence: 0.6 };
+  }
+
+  // =========================================================
+  // 6️⃣ UNBEKANNT (Fallback)
+  // =========================================================
+  return { category: "Unbekannt", confidence: 0.3 };
 }
 
 module.exports = { detectContentCategory };
